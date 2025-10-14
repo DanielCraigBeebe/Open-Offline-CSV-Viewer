@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSV Viewer with Editing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: background-color 0.3s;
+        }
+        h1 {
+            color: #0066cc;
+            margin-bottom: 20px;
+        }
+        /* Add horizontal scrolling container */
+        .table-scroll {
+            overflow-x: auto;
+            width: 100%;
+            position: relative;
+        }
+        .horizontal-scroll {
+            overflow-x: scroll;
+            overflow-y: hidden;
+            height: 15px;
+            width: 100%;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background-color: transparent;
+        }
+        .horizontal-scroll-inner {
+            height: 1px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            min-width: 100px;
+            position: relative;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        /* Editable cell styles */
+        .editable-cell {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .editable-cell:hover {
+            background-color: #e3f2fd !important;
+        }
+        .editable-cell.editing {
+            background-color: #fff3e0 !important;
+            padding: 0;
+        }
+        .editable-cell.modified {
+            background-color: #e8f5e8 !important;
+            position: relative;
+        }
+        .editable-cell.modified::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-top: 6px solid #4caf50;
+        }
+        
+        /* Edit input styles */
+        .cell-editor {
+            width: 100%;
+            height: 100%;
+            border: none;
+            padding: 8px;
+            font-family: inherit;
+            font-size: inherit;
+            background: transparent;
+            outline: 2px solid #2196f3;
+            border-radius: 2px;
+        }
+        
+        .file-area {
+            background-color: #fafafa;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        .file-input-container {
+            position: relative;
+            display: inline-block;
+            margin: 10px 0;
+        }
+        .file-input-button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .file-input-button:hover {
+            background-color: #0055aa;
+        }
+        #fileInput {
+            opacity: 0;
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #0055aa;
+        }
+        .hidden {
+            display: none;
+        }
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        select, input[type="text"], input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .page-nav {
+            margin: 15px 0;
+            text-align: center;
+        }
+        .jump-page {
+            margin-left: 15px;
+            display: inline-flex;
+            align-items: center;
+        }
+        #jumpPageInput {
+            width: 60px;
+            padding: 8px;
+            margin-right: 5px;
+        }
+        .letter-header {
+            background-color: #e8f4fc !important;
+            text-align: center;
+        }
+        .row-number {
+            background-color: #e0e0e0;
+            font-weight: bold;
+            text-align: center;
+            position: sticky;
+            left: 0;
+            z-index: 1;
+        }
+        .search-container {
+            margin-left: auto;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .dark-mode-toggle {
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            margin-left: 8px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #0066cc;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .data-info {
+            margin-top: 10px;
+            background-color: #f0f8ff;
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 4px solid #0066cc;
+        }
+        
+        .edit-info {
+            margin-top: 10px;
+            background-color: #fff3e0;
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 4px solid #ff9800;
+            font-size: 14px;
+        }
+        
+        #saveButton {
+            background-color: #4caf50;
+            font-weight: bold;
+        }
+        #saveButton:hover {
+            background-color: #45a049;
+        }
+        
+        /* Dark mode styles */
+        body.dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        body.dark-mode .container {
+            background-color: #1e1e1e;
+        }
+        body.dark-mode button {
+            background-color: #4e8cff;
+        }
+        body.dark-mode button:hover {
+            background-color: #69a1ff;
+        }
+        body.dark-mode select, 
+        body.dark-mode input[type="text"], 
+        body.dark-mode input[type="number"] {
+            background-color: #2c2c2c;
+            color: #e0e0e0;
+            border-color: #444;
+        }
+        body.dark-mode th {
+            background-color: #2c2c2c;
+            color: #e0e0e0;
+            border-color: #444;
+        }
+        body.dark-mode td {
+            border-color: #444;
+        }
+        body.dark-mode tr:nth-child(even) {
+            background-color: #252525;
+        }
+        body.dark-mode .letter-header {
+            background-color: #2a3b4d !important;
+        }
+        body.dark-mode .row-number {
+            background-color: #333333;
+        }
+        body.dark-mode .file-area {
+            background-color: #252525;
+            border-color: #444;
+        }
+        body.dark-mode .error {
+            background-color: #3d2929;
+            color: #ff6b6b;
+        }
+        body.dark-mode .data-info {
+            background-color: #1a2c42;
+            border-color: #4e8cff;
+        }
+        body.dark-mode .edit-info {
+            background-color: #2d2416;
+            border-color: #ff9800;
+        }
+        body.dark-mode h1 {
+            color: #4e8cff;
+        }
+        body.dark-mode .file-input-button {
+            background-color: #4e8cff;
+        }
+        body.dark-mode .file-input-button:hover {
+            background-color: #69a1ff;
+        }
+        body.dark-mode .editable-cell:hover {
+            background-color: #1a3a5c !important;
+        }
+        body.dark-mode .editable-cell.editing {
+            background-color: #3d2f1e !important;
+        }
+        body.dark-mode .editable-cell.modified {
+            background-color: #1a3d1a !important;
+        }
+        body.dark-mode .cell-editor {
+            background-color: #2c2c2c;
+            color: #e0e0e0;
+            outline-color: #4e8cff;
+        }
+        body.dark-mode #saveButton {
+            background-color: #4caf50;
+        }
+        body.dark-mode #saveButton:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CSV/TSV Viewer with Editing</h1>
+        
+        <div class="file-area">
+            <p>Select a CSV or TSV file to view:</p>
+            <div class="file-input-container">
+                <span class="file-input-button">Choose File</span>
+                <input type="file" id="fileInput" accept=".csv,.tsv,.txt">
+            </div>
+            <div id="fileName"></div>
+        </div>
+        
+        <div id="options" class="hidden">
+            <div class="controls">
+                <div>
+                    <label for="delimiter">Delimiter:</label>
+                    <select id="delimiter">
+                        <option value="auto">Auto-detect</option>
+                        <option value=",">Comma (CSV)</option>
+                        <option value="&#9;">Tab (TSV)</option>
+                        <option value=";">Semicolon</option>
+                        <option value="|">Pipe</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="headerRows">Header Rows:</label>
+                    <select id="headerRows">
+                        <option value="auto">Auto-detect</option>
+                        <option value="0">No headers</option>
+                        <option value="1" selected>1 row</option>
+                        <option value="2">2 rows</option>
+                        <option value="3">3 rows</option>
+                        <option value="4">4 rows</option>
+                        <option value="5">5 rows</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="rowsPerPage">Rows per page:</label>
+                    <select id="rowsPerPage">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                        <option value="500">500</option>
+                        <option value="-1">All</option>
+                    </select>
+                </div>
+                
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="Search...">
+                    <button id="searchButton">Search</button>
+                    
+                    <div class="dark-mode-toggle">
+                        <label for="darkModeToggle">Dark Mode</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="darkModeToggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="parseButton">Parse File</button>
+            <div id="status" class="status"></div>
+            <div id="error" class="error hidden"></div>
+        </div>
+        
+        <div id="dataInfo" class="data-info hidden"></div>
+        <div id="editInfo" class="edit-info hidden">
+            <strong>Edit Mode:</strong> Click any cell (including empty ones) to edit. Press Enter to save, Escape to cancel. Modified cells show a green triangle. Use "Save Changes" to make edits permanent.
+        </div>
+        <div id="tableContainer" class="hidden"></div>
+        
+        <div id="pagination" class="hidden page-nav">
+            <button id="prevPage">Previous</button>
+            <span id="pageInfo">Page 1 of 1</span>
+            <button id="nextPage">Next</button>
+            <span class="jump-page">
+                <input type="number" id="jumpPageInput" min="1" placeholder="Page">
+                <button id="jumpPageButton">Jump to Page</button>
+            </span>
+        </div>
+        
+        <div id="actions" class="hidden controls">
+            <button id="saveButton">Save Changes</button>
+            <button id="exportButton">Export CSV</button>
+            <button id="copyButton">Copy to Clipboard</button>
+            <button id="resetButton">Reset All Changes</button>
+        </div>
+    </div>
+    
+    <script>
+        // DOM elements
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const options = document.getElementById('options');
+        const delimiter = document.getElementById('delimiter');
+        const headerRows = document.getElementById('headerRows');
+        const rowsPerPage = document.getElementById('rowsPerPage');
+        const parseButton = document.getElementById('parseButton');
+        const status = document.getElementById('status');
+        const error = document.getElementById('error');
+        const tableContainer = document.getElementById('tableContainer');
+        const dataInfo = document.getElementById('dataInfo');
+        const editInfo = document.getElementById('editInfo');
+        const pagination = document.getElementById('pagination');
+        const pageInfo = document.getElementById('pageInfo');
+        const prevPage = document.getElementById('prevPage');
+        const nextPage = document.getElementById('nextPage');
+        const jumpPageInput = document.getElementById('jumpPageInput');
+        const jumpPageButton = document.getElementById('jumpPageButton');
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const actions = document.getElementById('actions');
+        const saveButton = document.getElementById('saveButton');
+        const exportButton = document.getElementById('exportButton');
+        const copyButton = document.getElementById('copyButton');
+        const resetButton = document.getElementById('resetButton');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        
+        // Global variables
+        let fileContent = null;
+        let parsedData = { data: [], headers: [] };
+        let filteredData = { data: [], headers: [] };
+        let originalData = { data: [], headers: [] }; // Store original data for reset
+        let modifiedCells = new Set(); // Track which cells have been modified
+        let currentPage = 1;
+        let currentEditor = null; // Track the currently editing cell
+        
+        // Set dark mode by default
+        document.body.classList.add('dark-mode');
+        
+        // Event listeners
+        fileInput.addEventListener('change', function() {
+            if (this.files.length) {
+                handleFile(this.files[0]);
+            }
+        });
+        
+        parseButton.addEventListener('click', parseFile);
+        prevPage.addEventListener('click', prevPageClick);
+        nextPage.addEventListener('click', nextPageClick);
+        jumpPageButton.addEventListener('click', jumpToPage);
+        searchButton.addEventListener('click', search);
+        saveButton.addEventListener('click', saveChanges);
+        exportButton.addEventListener('click', exportData);
+        copyButton.addEventListener('click', copyToClipboard);
+        resetButton.addEventListener('click', resetAllChanges);
+        darkModeToggle.addEventListener('change', toggleDarkMode);
+        
+        // Add Enter key event listeners for search and jump to page
+        searchInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                search();
+            }
+        });
+        
+        jumpPageInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                jumpToPage();
+            }
+        });
+        
+        // Global click handler to close editing when clicking outside
+        document.addEventListener('click', function(event) {
+            if (currentEditor && !event.target.closest('.cell-editor') && !event.target.classList.contains('editable-cell')) {
+                saveCurrentEdit();
+            }
+        });
+        
+        // Global keydown handler for escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && currentEditor) {
+                cancelCurrentEdit();
+            }
+        });
+        
+        // File handling
+        function handleFile(file) {
+            fileName.textContent = file.name;
+            
+            // Auto-detect delimiter based on file extension
+            const fileExt = file.name.split('.').pop().toLowerCase();
+            if (fileExt === 'tsv') {
+                delimiter.value = '\t';
+            } else if (fileExt === 'csv') {
+                delimiter.value = ',';
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                fileContent = e.target.result;
+                options.classList.remove('hidden');
+                status.textContent = 'File loaded. Click "Parse File" to view.';
+                error.classList.add('hidden');
+            };
+            reader.onerror = function() {
+                error.textContent = 'Error reading file';
+                error.classList.remove('hidden');
+            };
+            reader.readAsText(file);
+        }
+        
+        // Parse file
+        function parseFile() {
+            if (!fileContent) {
+                error.textContent = 'Please select a file first';
+                error.classList.remove('hidden');
+                return;
+            }
+            
+            error.classList.add('hidden');
+            
+            let delimiterValue = delimiter.value;
+            if (delimiterValue === 'auto') {
+                // Simple auto-detection
+                const commaCount = (fileContent.match(/,/g) || []).length;
+                const tabCount = (fileContent.match(/\t/g) || []).length;
+                const semicolonCount = (fileContent.match(/;/g) || []).length;
+                
+                if (tabCount > commaCount && tabCount > semicolonCount) {
+                    delimiterValue = '\t';
+                } else if (semicolonCount > commaCount) {
+                    delimiterValue = ';';
+                } else {
+                    delimiterValue = ',';
+                }
+            }
+            
+            // Parse the CSV
+            const rows = fileContent.split(/\r?\n/).filter(row => row.trim() !== '');
+            if (rows.length === 0) {
+                error.textContent = 'No data found in file';
+                error.classList.remove('hidden');
+                return;
+            }
+            
+            // Parse each row
+            const parsedRows = rows.map(row => {
+                const values = [];
+                let inQuote = false;
+                let currentValue = '';
+                
+                for (let i = 0; i < row.length; i++) {
+                    const char = row[i];
+                    const nextChar = row[i + 1];
+                    
+                    if (char === '"' && !inQuote) {
+                        inQuote = true;
+                    } else if (char === '"' && inQuote && nextChar === '"') {
+                        currentValue += '"';
+                        i++; // Skip next quote
+                    } else if (char === '"' && inQuote) {
+                        inQuote = false;
+                    } else if (char === delimiterValue && !inQuote) {
+                        values.push(currentValue);
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                
+                // Push the last value
+                values.push(currentValue);
+                return values;
+            });
+            
+            // Extract headers
+            let headerRowCount = headerRows.value;
+            if (headerRowCount === 'auto') {
+                headerRowCount = 1;
+            } else {
+                headerRowCount = parseInt(headerRowCount);
+            }
+            
+            // Split headers and data
+            let headers = [];
+            let data = parsedRows;
+            
+            if (headerRowCount > 0 && parsedRows.length > headerRowCount) {
+                headers = parsedRows.slice(0, headerRowCount);
+                data = parsedRows.slice(headerRowCount);
+            }
+            
+            parsedData = { data, headers };
+            originalData = JSON.parse(JSON.stringify(parsedData)); // Deep copy for reset
+            filteredData = { ...parsedData };
+            modifiedCells.clear(); // Clear any previous modifications
+            
+            // Display information
+            dataInfo.innerHTML = `<strong>Dataset:</strong> ${data.length} rows × ${data[0]?.length || 0} columns`;
+            dataInfo.classList.remove('hidden');
+            editInfo.classList.remove('hidden');
+            
+            currentPage = 1;
+            renderTable();
+            actions.classList.remove('hidden');
+        }
+        
+        // Helper to get Excel-style column names (A, B, C, ..., Z, AA, AB, etc.)
+        function getColumnLetter(index) {
+            let column = '';
+            let temp = index + 1;
+            
+            while (temp > 0) {
+                let remainder = (temp - 1) % 26;
+                column = String.fromCharCode(65 + remainder) + column;
+                temp = Math.floor((temp - remainder) / 26);
+            }
+            
+            return column;
+        }
+        
+        // Create cell ID for tracking modifications
+        function getCellId(isHeader, rowIndex, colIndex) {
+            return `${isHeader ? 'h' : 'd'}_${rowIndex}_${colIndex}`;
+        }
+        
+        // Enter edit mode for a cell
+        function enterEditMode(cell, isHeader, rowIndex, colIndex) {
+            if (currentEditor) {
+                saveCurrentEdit();
+            }
+            
+            const currentValue = cell.textContent;
+            cell.classList.add('editing');
+            
+            const editor = document.createElement('input');
+            editor.type = 'text';
+            editor.className = 'cell-editor';
+            editor.value = currentValue;
+            
+            cell.innerHTML = '';
+            cell.appendChild(editor);
+            
+            currentEditor = {
+                cell: cell,
+                editor: editor,
+                originalValue: currentValue,
+                isHeader: isHeader,
+                rowIndex: rowIndex,
+                colIndex: colIndex
+            };
+            
+            editor.focus();
+            editor.select();
+            
+            // Handle Enter and Escape keys
+            editor.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    saveCurrentEdit();
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelCurrentEdit();
+                }
+            });
+        }
+        
+        // Save current edit
+        function saveCurrentEdit() {
+            if (!currentEditor) return;
+            
+            const { cell, editor, originalValue, isHeader, rowIndex, colIndex } = currentEditor;
+            const newValue = editor.value;
+            
+            // Extend arrays if necessary for new columns
+            if (isHeader) {
+                // Ensure header row exists and has enough columns
+                if (!filteredData.headers[rowIndex]) {
+                    filteredData.headers[rowIndex] = [];
+                    parsedData.headers[rowIndex] = [];
+                }
+                while (filteredData.headers[rowIndex].length <= colIndex) {
+                    filteredData.headers[rowIndex].push('');
+                    parsedData.headers[rowIndex].push('');
+                }
+                filteredData.headers[rowIndex][colIndex] = newValue;
+                parsedData.headers[rowIndex][colIndex] = newValue;
+            } else {
+                // Ensure data row exists and has enough columns
+                if (!filteredData.data[rowIndex]) {
+                    filteredData.data[rowIndex] = [];
+                    parsedData.data[rowIndex] = [];
+                }
+                while (filteredData.data[rowIndex].length <= colIndex) {
+                    filteredData.data[rowIndex].push('');
+                    parsedData.data[rowIndex].push('');
+                }
+                filteredData.data[rowIndex][colIndex] = newValue;
+                parsedData.data[rowIndex][colIndex] = newValue;
+            }
+            
+            // Track modification
+            const cellId = getCellId(isHeader, rowIndex, colIndex);
+            const originalCellValue = isHeader ? 
+                (originalData.headers[rowIndex]?.[colIndex] || '') : 
+                (originalData.data[rowIndex]?.[colIndex] || '');
+                
+            if (newValue !== originalCellValue) {
+                modifiedCells.add(cellId);
+                cell.classList.add('modified');
+            } else {
+                modifiedCells.delete(cellId);
+                cell.classList.remove('modified');
+            }
+            
+            // Exit edit mode
+            cell.classList.remove('editing');
+            cell.innerHTML = newValue;
+            cell.classList.add('editable-cell');
+            
+            currentEditor = null;
+        }
+        
+        // Cancel current edit
+        function cancelCurrentEdit() {
+            if (!currentEditor) return;
+            
+            const { cell, originalValue } = currentEditor;
+            
+            // Restore original value
+            cell.classList.remove('editing');
+            cell.innerHTML = originalValue;
+            cell.classList.add('editable-cell');
+            
+            currentEditor = null;
+        }
+        
+        // Render table
+        function renderTable() {
+            if (filteredData.data.length === 0) {
+                tableContainer.innerHTML = 'No data to display';
+                pagination.classList.add('hidden');
+                return;
+            }
+            
+            const rowsPerPageValue = parseInt(rowsPerPage.value);
+            const totalPages = rowsPerPageValue === -1 ? 1 : Math.ceil(filteredData.data.length / rowsPerPageValue);
+            
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            
+            // Create table with scrollable container and top scrollbar
+            let tableHTML = '<div class="horizontal-scroll"><div class="horizontal-scroll-inner"></div></div><div class="table-scroll"><table>';
+            
+            // Add column letters header row
+            tableHTML += '<thead><tr><th></th>';
+            
+            // Get the max columns
+            const maxColumns = Math.max(
+                ...filteredData.headers.map(row => row.length),
+                ...filteredData.data.map(row => row.length)
+            );
+            
+            // Add column letters
+            for (let i = 0; i < maxColumns; i++) {
+                tableHTML += `<th class="letter-header">${getColumnLetter(i)}</th>`;
+            }
+            tableHTML += '</tr>';
+            
+            // Add header rows
+            let rowNumber = 1;
+            filteredData.headers.forEach((headerRow, headerIndex) => {
+                tableHTML += `<tr><th class="row-number">${rowNumber}</th>`;
+                rowNumber++;
+                
+                headerRow.forEach((header, colIndex) => {
+                    const cellId = getCellId(true, headerIndex, colIndex);
+                    const isModified = modifiedCells.has(cellId);
+                    const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
+                    tableHTML += `<th class="${cellClass}" data-is-header="true" data-row="${headerIndex}" data-col="${colIndex}">${header}</th>`;
+                });
+                
+                // Add empty editable cells if needed
+                for (let i = headerRow.length; i < maxColumns; i++) {
+                    const cellId = getCellId(true, headerIndex, i);
+                    const isModified = modifiedCells.has(cellId);
+                    const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
+                    tableHTML += `<th class="${cellClass}" data-is-header="true" data-row="${headerIndex}" data-col="${i}"></th>`;
+                }
+                
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '</thead><tbody>';
+            
+            // Add data rows
+            const startIndex = rowsPerPageValue === -1 ? 0 : (currentPage - 1) * rowsPerPageValue;
+            const endIndex = rowsPerPageValue === -1 ? filteredData.data.length : Math.min(startIndex + rowsPerPageValue, filteredData.data.length);
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                const row = filteredData.data[i];
+                tableHTML += '<tr>';
+                
+                // Add row number, continuing from header rows
+                tableHTML += `<td class="row-number">${rowNumber}</td>`;
+                rowNumber++;
+                
+                // Add data cells
+                row.forEach((cell, colIndex) => {
+                    const cellId = getCellId(false, i, colIndex);
+                    const isModified = modifiedCells.has(cellId);
+                    const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
+                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${colIndex}">${cell}</td>`;
+                });
+                
+                // Add empty editable cells if needed
+                for (let j = row.length; j < maxColumns; j++) {
+                    const cellId = getCellId(false, i, j);
+                    const isModified = modifiedCells.has(cellId);
+                    const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
+                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${j}"></td>`;
+                }
+                
+                tableHTML += '</tr>';
+            }
+            
+            tableHTML += '</tbody></table></div>';
+            tableContainer.innerHTML = tableHTML;
+            tableContainer.classList.remove('hidden');
+            
+            // Add click event listeners to editable cells
+            const editableCells = tableContainer.querySelectorAll('.editable-cell');
+            editableCells.forEach(cell => {
+                cell.addEventListener('click', function() {
+                    const isHeader = this.dataset.isHeader === 'true';
+                    const rowIndex = parseInt(this.dataset.row);
+                    const colIndex = parseInt(this.dataset.col);
+                    
+                    enterEditMode(this, isHeader, rowIndex, colIndex);
+                });
+            });
+            
+            // Set up horizontal scroll synchronization
+            const tableScroll = tableContainer.querySelector('.table-scroll');
+            const horizontalScroll = tableContainer.querySelector('.horizontal-scroll');
+            
+            if (tableScroll && horizontalScroll) {
+                // Get the maximum width of the table
+                const table = tableScroll.querySelector('table');
+                if (table) {
+                    const tableWidth = table.offsetWidth;
+                    horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
+                    
+                    // Synchronize scrolling
+                    horizontalScroll.addEventListener('scroll', function() {
+                        tableScroll.scrollLeft = horizontalScroll.scrollLeft;
+                    });
+                    
+                    tableScroll.addEventListener('scroll', function() {
+                        horizontalScroll.scrollLeft = tableScroll.scrollLeft;
+                    });
+                }
+            }
+            
+            // Update pagination
+            if (rowsPerPageValue === -1 || filteredData.data.length <= rowsPerPageValue) {
+                pagination.classList.add('hidden');
+            } else {
+                pagination.classList.remove('hidden');
+                pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                jumpPageInput.setAttribute('max', totalPages);
+                jumpPageInput.setAttribute('placeholder', `1-${totalPages}`);
+                prevPage.disabled = currentPage === 1;
+                nextPage.disabled = currentPage === totalPages;
+            }
+        }
+        
+        // Navigation functions
+        function prevPageClick() {
+            if (currentEditor) saveCurrentEdit();
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable();
+            }
+        }
+        
+        function nextPageClick() {
+            if (currentEditor) saveCurrentEdit();
+            const rowsPerPageValue = parseInt(rowsPerPage.value);
+            const totalPages = Math.ceil(filteredData.data.length / rowsPerPageValue);
+            
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderTable();
+            }
+        }
+        
+        function jumpToPage() {
+            if (currentEditor) saveCurrentEdit();
+            const pageNum = parseInt(jumpPageInput.value);
+            const rowsPerPageValue = parseInt(rowsPerPage.value);
+            const totalPages = Math.ceil(filteredData.data.length / rowsPerPageValue);
+            
+            if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                currentPage = pageNum;
+                renderTable();
+                jumpPageInput.value = '';
+            } else {
+                error.textContent = `Please enter a valid page number (1-${totalPages})`;
+                error.classList.remove('hidden');
+            }
+        }
+        
+        // Search function
+        function search() {
+            if (currentEditor) saveCurrentEdit();
+            if (!parsedData.data.length) return;
+            
+            const query = searchInput.value.toLowerCase();
+            
+            if (!query.trim()) {
+                filteredData = { ...parsedData };
+            } else {
+                const filteredRows = parsedData.data.filter(row => 
+                    row.some(cell => String(cell).toLowerCase().includes(query))
+                );
+                
+                filteredData = {
+                    headers: parsedData.headers,
+                    data: filteredRows
+                };
+            }
+            
+            currentPage = 1;
+            renderTable();
+            
+            // Show result count in status
+            if (query.trim()) {
+                status.textContent = `Found ${filteredData.data.length} matching rows`;
+                setTimeout(() => {
+                    if (status.textContent.startsWith('Found ')) {
+                        status.textContent = '';
+                    }
+                }, 3000);
+            }
+        }
+        
+        // Save changes permanently
+        function saveChanges() {
+            if (currentEditor) saveCurrentEdit();
+            
+            if (modifiedCells.size === 0) {
+                status.textContent = 'No changes to save';
+                setTimeout(() => {
+                    if (status.textContent === 'No changes to save') {
+                        status.textContent = '';
+                    }
+                }, 2000);
+                return;
+            }
+            
+            const changeCount = modifiedCells.size;
+            
+            // Update original data to current state
+            originalData = JSON.parse(JSON.stringify(parsedData));
+            modifiedCells.clear();
+            
+            // Remove all modified indicators
+            const modifiedElements = tableContainer.querySelectorAll('.modified');
+            modifiedElements.forEach(el => el.classList.remove('modified'));
+            
+            status.textContent = `Changes saved successfully! (${changeCount} modifications)`;
+            setTimeout(() => {
+                if (status.textContent.includes('Changes saved successfully')) {
+                    status.textContent = '';
+                }
+            }, 3000);
+        }
+        
+        // Reset all changes
+        function resetAllChanges() {
+            if (currentEditor) cancelCurrentEdit();
+            
+            if (confirm('Are you sure you want to reset all changes? This cannot be undone.')) {
+                parsedData = JSON.parse(JSON.stringify(originalData));
+                filteredData = { ...parsedData };
+                modifiedCells.clear();
+                renderTable();
+                status.textContent = 'All changes have been reset';
+                setTimeout(() => {
+                    if (status.textContent === 'All changes have been reset') {
+                        status.textContent = '';
+                    }
+                }, 3000);
+            }
+        }
+        
+        // Export function
+        function exportData() {
+            if (currentEditor) saveCurrentEdit();
+            if (!filteredData.data.length) return;
+            
+            const csvDelimiter = delimiter.value === 'auto' ? ',' : delimiter.value;
+            let csv = '';
+            
+            // Add headers
+            if (filteredData.headers.length > 0) {
+                filteredData.headers.forEach(row => {
+                    csv += row.join(csvDelimiter) + '\n';
+                });
+            }
+            
+            // Add data
+            filteredData.data.forEach(row => {
+                csv += row.join(csvDelimiter) + '\n';
+            });
+            
+            // Create download
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'export.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+        
+        // Copy to clipboard
+        function copyToClipboard() {
+            if (currentEditor) saveCurrentEdit();
+            if (!filteredData.data.length) return;
+            
+            let text = '';
+            
+            // Add headers
+            if (filteredData.headers.length > 0) {
+                filteredData.headers.forEach(row => {
+                    text += row.join('\t') + '\n';
+                });
+            }
+            
+            // Add current page data
+            const rowsPerPageValue = parseInt(rowsPerPage.value);
+            const startIndex = rowsPerPageValue === -1 ? 0 : (currentPage - 1) * rowsPerPageValue;
+            const endIndex = rowsPerPageValue === -1 ? filteredData.data.length : Math.min(startIndex + rowsPerPageValue, filteredData.data.length);
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                text += filteredData.data[i].join('\t') + '\n';
+            }
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    status.textContent = 'Data copied to clipboard!';
+                    setTimeout(() => {
+                        status.textContent = '';
+                    }, 2000);
+                })
+                .catch(err => {
+                    error.textContent = 'Failed to copy: ' + err;
+                    error.classList.remove('hidden');
+                });
+        }
+        
+        // Toggle dark mode
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode', this.checked);
+        }
+    </script>
+</body>
+</html>
