@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSV Viewer with Editing</title>
     <style>
         body {
@@ -363,6 +365,146 @@
         body.dark-mode #saveButton:hover {
             background-color: #45a049;
         }
+
+        /* Responsive CSS for scaling to browser size */
+        @media screen and (max-width: 1200px) {
+            .container {
+                max-width: 100%;
+                margin: 10px;
+                padding: 15px;
+            }
+        }
+
+        @media screen and (max-width: 768px) {
+            body {
+                margin: 10px;
+            }
+
+            .container {
+                margin: 5px;
+                padding: 10px;
+                border-radius: 4px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+                margin-bottom: 15px;
+            }
+
+            /* Make table cells more compact on mobile */
+            th, td {
+                min-width: 80px;
+                padding: 6px;
+                font-size: 0.9rem;
+            }
+
+            /* Make controls stack better on mobile */
+            .controls {
+                gap: 8px;
+            }
+
+            .controls > div {
+                width: 100%;
+            }
+
+            .controls select,
+            .controls input {
+                width: 100%;
+            }
+
+            .search-container {
+                width: 100%;
+                margin-left: 0;
+            }
+
+            #searchInput {
+                flex: 1;
+            }
+
+            /* Make buttons full width on mobile */
+            button {
+                padding: 8px 15px;
+                font-size: 0.9rem;
+            }
+
+            /* Pagination controls */
+            .page-nav {
+                font-size: 0.9rem;
+            }
+
+            .jump-page {
+                display: block;
+                margin-top: 10px;
+                margin-left: 0;
+            }
+
+            #jumpPageInput {
+                width: 80px;
+            }
+        }
+
+        @media screen and (max-width: 480px) {
+            body {
+                margin: 5px;
+            }
+
+            .container {
+                margin: 0;
+                padding: 8px;
+                border-radius: 0;
+            }
+
+            h1 {
+                font-size: 1.2rem;
+                margin-bottom: 10px;
+            }
+
+            /* Even more compact on very small screens */
+            th, td {
+                min-width: 60px;
+                padding: 4px;
+                font-size: 0.85rem;
+            }
+
+            .file-area {
+                padding: 15px 10px;
+            }
+
+            button {
+                padding: 8px 12px;
+                font-size: 0.85rem;
+            }
+
+            /* Make action buttons stack */
+            #actions {
+                flex-direction: column;
+            }
+
+            #actions button {
+                width: 100%;
+                margin: 5px 0;
+            }
+
+            .data-info,
+            .edit-info {
+                font-size: 0.85rem;
+                padding: 6px;
+            }
+        }
+
+        /* Ensure container scales with browser window */
+        html, body {
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        .container {
+            box-sizing: border-box;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -655,7 +797,7 @@
             
             parsedData = { data, headers };
             originalData = JSON.parse(JSON.stringify(parsedData)); // Deep copy for reset
-            filteredData = { ...parsedData };
+            filteredData = JSON.parse(JSON.stringify(parsedData)); // Deep copy
             modifiedCells.clear(); // Clear any previous modifications
             
             // Display information
@@ -907,19 +1049,22 @@
             // Set up horizontal scroll synchronization
             const tableScroll = tableContainer.querySelector('.table-scroll');
             const horizontalScroll = tableContainer.querySelector('.horizontal-scroll');
-            
+
             if (tableScroll && horizontalScroll) {
                 // Get the maximum width of the table
                 const table = tableScroll.querySelector('table');
                 if (table) {
-                    const tableWidth = table.offsetWidth;
-                    horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
-                    
+                    // Use requestAnimationFrame to ensure layout is complete
+                    requestAnimationFrame(() => {
+                        const tableWidth = table.offsetWidth;
+                        horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
+                    });
+
                     // Synchronize scrolling
                     horizontalScroll.addEventListener('scroll', function() {
                         tableScroll.scrollLeft = horizontalScroll.scrollLeft;
                     });
-                    
+
                     tableScroll.addEventListener('scroll', function() {
                         horizontalScroll.scrollLeft = tableScroll.scrollLeft;
                     });
@@ -981,9 +1126,9 @@
             if (!parsedData.data.length) return;
             
             const query = searchInput.value.toLowerCase();
-            
+
             if (!query.trim()) {
-                filteredData = { ...parsedData };
+                filteredData = JSON.parse(JSON.stringify(parsedData)); // Deep copy
             } else {
                 const filteredRows = parsedData.data.filter(row => 
                     row.some(cell => String(cell).toLowerCase().includes(query))
@@ -1047,7 +1192,7 @@
             
             if (confirm('Are you sure you want to reset all changes? This cannot be undone.')) {
                 parsedData = JSON.parse(JSON.stringify(originalData));
-                filteredData = { ...parsedData };
+                filteredData = JSON.parse(JSON.stringify(parsedData)); // Deep copy
                 modifiedCells.clear();
                 renderTable();
                 status.textContent = 'All changes have been reset';
@@ -1059,26 +1204,47 @@
             }
         }
         
+        // Helper function to escape CSV values according to RFC 4180
+        function escapeCSVValue(value, delimiter) {
+            // Convert to string
+            const strValue = String(value);
+
+            // Check if escaping is needed (contains delimiter, quote, or newline)
+            const needsEscaping = strValue.includes(delimiter) ||
+                                  strValue.includes('"') ||
+                                  strValue.includes('\n') ||
+                                  strValue.includes('\r');
+
+            if (needsEscaping) {
+                // Escape quotes by doubling them and wrap in quotes
+                return '"' + strValue.replace(/"/g, '""') + '"';
+            }
+
+            return strValue;
+        }
+
         // Export function
         function exportData() {
             if (currentEditor) saveCurrentEdit();
             if (!filteredData.data.length) return;
-            
+
             const csvDelimiter = delimiter.value === 'auto' ? ',' : delimiter.value;
             let csv = '';
-            
+
             // Add headers
             if (filteredData.headers.length > 0) {
                 filteredData.headers.forEach(row => {
-                    csv += row.join(csvDelimiter) + '\n';
+                    const escapedRow = row.map(cell => escapeCSVValue(cell, csvDelimiter));
+                    csv += escapedRow.join(csvDelimiter) + '\n';
                 });
             }
-            
+
             // Add data
             filteredData.data.forEach(row => {
-                csv += row.join(csvDelimiter) + '\n';
+                const escapedRow = row.map(cell => escapeCSVValue(cell, csvDelimiter));
+                csv += escapedRow.join(csvDelimiter) + '\n';
             });
-            
+
             // Create download
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
