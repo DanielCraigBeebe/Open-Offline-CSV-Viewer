@@ -64,6 +64,14 @@
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+
+        /* Row hover highlighting */
+        tbody tr:hover {
+            background-color: #e3f2fd !important;
+        }
+        tbody tr:hover td {
+            background-color: inherit;
+        }
         
         /* Editable cell styles */
         .editable-cell {
@@ -313,6 +321,12 @@
         }
         body.dark-mode tr:nth-child(even) {
             background-color: #252525;
+        }
+        body.dark-mode tbody tr:hover {
+            background-color: #1a3a5c !important;
+        }
+        body.dark-mode tbody tr:hover td {
+            background-color: inherit;
         }
         body.dark-mode .letter-header {
             background-color: #2a3b4d !important;
@@ -631,6 +645,7 @@
         
         // Global variables
         let fileContent = null;
+        let originalFileName = 'export.csv'; // Store original filename for export
         let parsedData = { data: [], headers: [] };
         let filteredData = { data: [], headers: [] };
         let originalData = { data: [], headers: [] }; // Store original data for reset
@@ -638,9 +653,49 @@
         let currentPage = 1;
         let currentEditor = null; // Track the currently editing cell
         
-        // Set dark mode by default
-        document.body.classList.add('dark-mode');
-        
+        // LocalStorage: Save and load user preferences
+        function savePreferences() {
+            const preferences = {
+                darkMode: darkModeToggle.checked,
+                rowsPerPage: rowsPerPage.value,
+                delimiter: delimiter.value,
+                headerRows: headerRows.value
+            };
+            localStorage.setItem('csvViewerPreferences', JSON.stringify(preferences));
+        }
+
+        function loadPreferences() {
+            try {
+                const saved = localStorage.getItem('csvViewerPreferences');
+                if (saved) {
+                    const preferences = JSON.parse(saved);
+
+                    // Apply dark mode preference
+                    if (preferences.darkMode !== undefined) {
+                        darkModeToggle.checked = preferences.darkMode;
+                        document.body.classList.toggle('dark-mode', preferences.darkMode);
+                    } else {
+                        // Default to dark mode if no preference
+                        darkModeToggle.checked = true;
+                        document.body.classList.add('dark-mode');
+                    }
+
+                    // Apply other preferences
+                    if (preferences.rowsPerPage) rowsPerPage.value = preferences.rowsPerPage;
+                    if (preferences.delimiter) delimiter.value = preferences.delimiter;
+                    if (preferences.headerRows) headerRows.value = preferences.headerRows;
+                }
+            } catch (e) {
+                console.error('Failed to load preferences:', e);
+                // Default to dark mode on error
+                darkModeToggle.checked = true;
+                document.body.classList.add('dark-mode');
+            }
+        }
+
+        // Load preferences on page load
+        loadPreferences();
+
         // Event listeners
         fileInput.addEventListener('change', function() {
             if (this.files.length) {
@@ -658,6 +713,16 @@
         copyButton.addEventListener('click', copyToClipboard);
         resetButton.addEventListener('click', resetAllChanges);
         darkModeToggle.addEventListener('change', toggleDarkMode);
+
+        // Save preferences when settings change
+        delimiter.addEventListener('change', savePreferences);
+        headerRows.addEventListener('change', savePreferences);
+        rowsPerPage.addEventListener('change', () => {
+            savePreferences();
+            if (parsedData.data.length > 0) {
+                renderTable(); // Re-render to apply new page size
+            }
+        });
         
         // Add Enter key event listeners for search and jump to page
         searchInput.addEventListener('keydown', function(event) {
@@ -691,7 +756,8 @@
         // File handling
         function handleFile(file) {
             fileName.textContent = file.name;
-            
+            originalFileName = file.name; // Store for export
+
             // Auto-detect delimiter based on file extension
             const fileExt = file.name.split('.').pop().toLowerCase();
             if (fileExt === 'tsv') {
@@ -1245,12 +1311,12 @@
                 csv += escapedRow.join(csvDelimiter) + '\n';
             });
 
-            // Create download
+            // Create download with original filename or 'export.csv'
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'export.csv';
+            a.download = originalFileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -1296,6 +1362,7 @@
         // Toggle dark mode
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode', this.checked);
+            savePreferences();
         }
     </script>
 </body>
