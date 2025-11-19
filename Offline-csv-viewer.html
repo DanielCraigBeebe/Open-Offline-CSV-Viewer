@@ -99,6 +99,11 @@
             border-left: 6px solid transparent;
             border-top: 6px solid #4caf50;
         }
+        .editable-cell.selected {
+            outline: 2px solid #0066cc;
+            outline-offset: -2px;
+            background-color: #e3f2fd !important;
+        }
         
         /* Edit input styles */
         .cell-editor {
@@ -278,6 +283,60 @@
             padding: 5px 10px;
             font-size: 0.85em;
         }
+
+        /* Find & Replace Modal */
+        .find-replace-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            padding: 20px;
+            min-width: 400px;
+            z-index: 2000;
+        }
+        .find-replace-modal.show {
+            display: block;
+        }
+        .find-replace-modal h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .find-replace-modal label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .find-replace-modal input[type="text"] {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .find-replace-modal .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .find-replace-modal .button-group button {
+            flex: 1;
+            min-width: 80px;
+        }
+        .find-replace-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1999;
+        }
+        .find-replace-overlay.show {
+            display: block;
+        }
         .row-number {
             background-color: #e0e0e0;
             font-weight: bold;
@@ -438,6 +497,16 @@
             background: #2c2c2c;
             border-color: #444;
         }
+        body.dark-mode .find-replace-modal {
+            background: #2c2c2c;
+            border-color: #444;
+        }
+        body.dark-mode .find-replace-modal h3 {
+            color: #e0e0e0;
+        }
+        body.dark-mode .find-replace-modal label {
+            color: #e0e0e0;
+        }
         body.dark-mode .row-number {
             background-color: #333333;
         }
@@ -479,6 +548,10 @@
             background-color: #2c2c2c;
             color: #e0e0e0;
             outline-color: #4e8cff;
+        }
+        body.dark-mode .editable-cell.selected {
+            outline-color: #4e8cff;
+            background-color: #1a3a5c !important;
         }
         body.dark-mode #saveButton {
             background-color: #4caf50;
@@ -718,9 +791,37 @@
             <button id="exportButton">Export CSV</button>
             <button id="copyButton">Copy to Clipboard</button>
             <button id="resetButton">Reset All Changes</button>
+            <button id="findReplaceButton">Find & Replace (Ctrl+F)</button>
         </div>
     </div>
-    
+
+    <!-- Find & Replace Modal -->
+    <div class="find-replace-overlay" id="findReplaceOverlay"></div>
+    <div class="find-replace-modal" id="findReplaceModal">
+        <h3>Find & Replace</h3>
+        <label for="findInput">Find:</label>
+        <input type="text" id="findInput" placeholder="Enter text to find...">
+
+        <label for="replaceInput">Replace with:</label>
+        <input type="text" id="replaceInput" placeholder="Enter replacement text...">
+
+        <div style="margin-bottom: 15px;">
+            <label>
+                <input type="checkbox" id="caseSensitiveCheckbox">
+                Case sensitive
+            </label>
+        </div>
+
+        <div class="button-group">
+            <button id="findNextButton">Find Next</button>
+            <button id="replaceButton">Replace</button>
+            <button id="replaceAllButton">Replace All</button>
+            <button id="closeFindReplaceButton">Close</button>
+        </div>
+
+        <div id="findReplaceStatus" class="status"></div>
+    </div>
+
     <script>
         // DOM elements
         const fileInput = document.getElementById('fileInput');
@@ -749,6 +850,17 @@
         const copyButton = document.getElementById('copyButton');
         const resetButton = document.getElementById('resetButton');
         const darkModeToggle = document.getElementById('darkModeToggle');
+        const findReplaceButton = document.getElementById('findReplaceButton');
+        const findReplaceModal = document.getElementById('findReplaceModal');
+        const findReplaceOverlay = document.getElementById('findReplaceOverlay');
+        const findInputElem = document.getElementById('findInput');
+        const replaceInputElem = document.getElementById('replaceInput');
+        const caseSensitiveCheckbox = document.getElementById('caseSensitiveCheckbox');
+        const findNextButton = document.getElementById('findNextButton');
+        const replaceButton = document.getElementById('replaceButton');
+        const replaceAllButton = document.getElementById('replaceAllButton');
+        const closeFindReplaceButton = document.getElementById('closeFindReplaceButton');
+        const findReplaceStatus = document.getElementById('findReplaceStatus');
         
         // Global variables
         let fileContent = null;
@@ -763,6 +875,11 @@
         let sortDirection = null; // Track sort direction: 'asc' or 'desc'
         let columnWidths = {}; // Track custom column widths
         let columnFilters = {}; // Track active filters per column
+        let undoStack = []; // Undo history
+        let redoStack = []; // Redo history
+        const MAX_UNDO_STACK = 50; // Limit undo history to prevent memory issues
+        let selectedCell = null; // Track selected cell for keyboard navigation: {isHeader, rowIndex, colIndex, element}
+        let findReplaceLastMatch = null; // Track last find match for "Find Next"
         
         // LocalStorage: Save and load user preferences
         function savePreferences() {
@@ -824,6 +941,12 @@
         copyButton.addEventListener('click', copyToClipboard);
         resetButton.addEventListener('click', resetAllChanges);
         darkModeToggle.addEventListener('change', toggleDarkMode);
+        findReplaceButton.addEventListener('click', openFindReplace);
+        closeFindReplaceButton.addEventListener('click', closeFindReplace);
+        findReplaceOverlay.addEventListener('click', closeFindReplace);
+        findNextButton.addEventListener('click', findNext);
+        replaceButton.addEventListener('click', replaceOne);
+        replaceAllButton.addEventListener('click', replaceAll);
 
         // Save preferences when settings change
         delimiter.addEventListener('change', savePreferences);
@@ -857,10 +980,70 @@
             }
         });
         
-        // Global keydown handler for escape key
+        // Global keydown handler for escape key, undo/redo, and keyboard navigation
         document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && currentEditor) {
-                cancelCurrentEdit();
+            // Don't interfere with editing or input fields
+            if (currentEditor || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.tagName === 'SELECT') {
+                if (event.key === 'Escape' && currentEditor) {
+                    cancelCurrentEdit();
+                }
+                return;
+            }
+
+            // Undo: Ctrl+Z (or Cmd+Z on Mac)
+            if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+                event.preventDefault();
+                undo();
+                return;
+            }
+
+            // Redo: Ctrl+Y or Ctrl+Shift+Z (or Cmd on Mac)
+            if (((event.ctrlKey || event.metaKey) && event.key === 'y') ||
+                ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'z')) {
+                event.preventDefault();
+                redo();
+                return;
+            }
+
+            // Find & Replace: Ctrl+F (or Cmd+F on Mac)
+            if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+                event.preventDefault();
+                openFindReplace();
+                return;
+            }
+
+            // Keyboard navigation (only when a cell is selected and not editing)
+            if (selectedCell && !currentEditor) {
+                let handled = false;
+
+                // Arrow key navigation
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    navigateCell('up');
+                    handled = true;
+                } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    navigateCell('down');
+                    handled = true;
+                } else if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    navigateCell('left');
+                    handled = true;
+                } else if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    navigateCell('right');
+                    handled = true;
+                } else if (event.key === 'Tab') {
+                    event.preventDefault();
+                    navigateCell(event.shiftKey ? 'left' : 'right');
+                    handled = true;
+                } else if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (selectedCell && selectedCell.element) {
+                        enterEditMode(selectedCell.element, selectedCell.isHeader, selectedCell.rowIndex, selectedCell.colIndex);
+                    }
+                    handled = true;
+                }
             }
         });
         
@@ -976,6 +1159,8 @@
             originalData = JSON.parse(JSON.stringify(parsedData)); // Deep copy for reset
             filteredData = JSON.parse(JSON.stringify(parsedData)); // Deep copy
             modifiedCells.clear(); // Clear any previous modifications
+            undoStack = []; // Clear undo history
+            redoStack = []; // Clear redo history
             
             // Display information
             dataInfo.innerHTML = `<strong>Dataset:</strong> ${data.length} rows × ${data[0]?.length || 0} columns`;
@@ -1006,6 +1191,206 @@
             return `${isHeader ? 'h' : 'd'}_${rowIndex}_${colIndex}`;
         }
         
+        // Keyboard Navigation
+        function selectCell(cell, isHeader, rowIndex, colIndex) {
+            // Deselect previous cell
+            if (selectedCell && selectedCell.element) {
+                selectedCell.element.classList.remove('selected');
+            }
+
+            // Select new cell
+            if (cell) {
+                cell.classList.add('selected');
+                selectedCell = { element: cell, isHeader, rowIndex, colIndex };
+
+                // Scroll cell into view if needed
+                cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            } else {
+                selectedCell = null;
+            }
+        }
+
+        function navigateCell(direction) {
+            if (!selectedCell) return;
+
+            const { isHeader, rowIndex, colIndex } = selectedCell;
+            let newIsHeader = isHeader;
+            let newRowIndex = rowIndex;
+            let newColIndex = colIndex;
+
+            // Calculate the max columns for the current table
+            const maxColumns = Math.max(
+                ...filteredData.headers.map(row => row.length),
+                ...filteredData.data.map(row => row.length)
+            );
+
+            // Calculate total displayable rows
+            const rowsPerPageValue = parseInt(rowsPerPage.value);
+            const startIndex = rowsPerPageValue === -1 ? 0 : (currentPage - 1) * rowsPerPageValue;
+            const endIndex = rowsPerPageValue === -1 ? filteredData.data.length : Math.min(startIndex + rowsPerPageValue, filteredData.data.length);
+            const displayedDataRows = endIndex - startIndex;
+
+            switch (direction) {
+                case 'up':
+                    if (isHeader) {
+                        if (rowIndex > 0) {
+                            newRowIndex = rowIndex - 1;
+                        }
+                    } else {
+                        if (rowIndex > startIndex) {
+                            newRowIndex = rowIndex - 1;
+                        } else if (filteredData.headers.length > 0) {
+                            newIsHeader = true;
+                            newRowIndex = filteredData.headers.length - 1;
+                        }
+                    }
+                    break;
+
+                case 'down':
+                    if (isHeader) {
+                        if (rowIndex < filteredData.headers.length - 1) {
+                            newRowIndex = rowIndex + 1;
+                        } else if (displayedDataRows > 0) {
+                            newIsHeader = false;
+                            newRowIndex = startIndex;
+                        }
+                    } else {
+                        if (rowIndex < endIndex - 1) {
+                            newRowIndex = rowIndex + 1;
+                        }
+                    }
+                    break;
+
+                case 'left':
+                    if (newColIndex > 0) {
+                        newColIndex = newColIndex - 1;
+                    }
+                    break;
+
+                case 'right':
+                    if (newColIndex < maxColumns - 1) {
+                        newColIndex = newColIndex + 1;
+                    }
+                    break;
+            }
+
+            // Find and select the new cell
+            const cellSelector = `[data-is-header="${newIsHeader}"][data-row="${newRowIndex}"][data-col="${newColIndex}"]`;
+            const newCell = tableContainer.querySelector(cellSelector);
+
+            if (newCell) {
+                selectCell(newCell, newIsHeader, newRowIndex, newColIndex);
+            }
+        }
+
+        // Undo/Redo System
+        function pushToUndoStack(action) {
+            undoStack.push(action);
+            if (undoStack.length > MAX_UNDO_STACK) {
+                undoStack.shift(); // Remove oldest entry
+            }
+            redoStack = []; // Clear redo stack when new action is performed
+            updateUndoRedoStatus();
+        }
+
+        function undo() {
+            if (currentEditor) saveCurrentEdit();
+            if (undoStack.length === 0) {
+                status.textContent = 'Nothing to undo';
+                setTimeout(() => { status.textContent = ''; }, 1500);
+                return;
+            }
+
+            const action = undoStack.pop();
+            redoStack.push(action);
+
+            // Apply the undo
+            const { isHeader, rowIndex, colIndex, oldValue, newValue } = action;
+
+            if (isHeader) {
+                if (!parsedData.headers[rowIndex]) parsedData.headers[rowIndex] = [];
+                parsedData.headers[rowIndex][colIndex] = oldValue;
+                if (!filteredData.headers[rowIndex]) filteredData.headers[rowIndex] = [];
+                filteredData.headers[rowIndex][colIndex] = oldValue;
+            } else {
+                if (!parsedData.data[rowIndex]) parsedData.data[rowIndex] = [];
+                parsedData.data[rowIndex][colIndex] = oldValue;
+                if (!filteredData.data[rowIndex]) filteredData.data[rowIndex] = [];
+                filteredData.data[rowIndex][colIndex] = oldValue;
+            }
+
+            // Update modified cells tracking
+            const cellId = getCellId(isHeader, rowIndex, colIndex);
+            const originalCellValue = isHeader ?
+                (originalData.headers[rowIndex]?.[colIndex] || '') :
+                (originalData.data[rowIndex]?.[colIndex] || '');
+
+            if (oldValue !== originalCellValue) {
+                modifiedCells.add(cellId);
+            } else {
+                modifiedCells.delete(cellId);
+            }
+
+            renderTable();
+            updateUndoRedoStatus();
+            status.textContent = 'Undo applied';
+            setTimeout(() => { status.textContent = ''; }, 1500);
+        }
+
+        function redo() {
+            if (currentEditor) saveCurrentEdit();
+            if (redoStack.length === 0) {
+                status.textContent = 'Nothing to redo';
+                setTimeout(() => { status.textContent = ''; }, 1500);
+                return;
+            }
+
+            const action = redoStack.pop();
+            undoStack.push(action);
+
+            // Apply the redo
+            const { isHeader, rowIndex, colIndex, oldValue, newValue } = action;
+
+            if (isHeader) {
+                if (!parsedData.headers[rowIndex]) parsedData.headers[rowIndex] = [];
+                parsedData.headers[rowIndex][colIndex] = newValue;
+                if (!filteredData.headers[rowIndex]) filteredData.headers[rowIndex] = [];
+                filteredData.headers[rowIndex][colIndex] = newValue;
+            } else {
+                if (!parsedData.data[rowIndex]) parsedData.data[rowIndex] = [];
+                parsedData.data[rowIndex][colIndex] = newValue;
+                if (!filteredData.data[rowIndex]) filteredData.data[rowIndex] = [];
+                filteredData.data[rowIndex][colIndex] = newValue;
+            }
+
+            // Update modified cells tracking
+            const cellId = getCellId(isHeader, rowIndex, colIndex);
+            const originalCellValue = isHeader ?
+                (originalData.headers[rowIndex]?.[colIndex] || '') :
+                (originalData.data[rowIndex]?.[colIndex] || '');
+
+            if (newValue !== originalCellValue) {
+                modifiedCells.add(cellId);
+            } else {
+                modifiedCells.delete(cellId);
+            }
+
+            renderTable();
+            updateUndoRedoStatus();
+            status.textContent = 'Redo applied';
+            setTimeout(() => { status.textContent = ''; }, 1500);
+        }
+
+        function updateUndoRedoStatus() {
+            // Update data info to show undo/redo availability
+            if (dataInfo && !dataInfo.classList.contains('hidden')) {
+                const undoText = undoStack.length > 0 ? ` | Undo: ${undoStack.length}` : '';
+                const redoText = redoStack.length > 0 ? ` | Redo: ${redoStack.length}` : '';
+                const baseText = dataInfo.innerHTML.split(' | Undo')[0];
+                dataInfo.innerHTML = baseText + undoText + redoText;
+            }
+        }
+
         // Enter edit mode for a cell
         function enterEditMode(cell, isHeader, rowIndex, colIndex) {
             if (currentEditor) {
@@ -1050,10 +1435,21 @@
         // Save current edit
         function saveCurrentEdit() {
             if (!currentEditor) return;
-            
+
             const { cell, editor, originalValue, isHeader, rowIndex, colIndex } = currentEditor;
             const newValue = editor.value;
-            
+
+            // Only push to undo stack if value actually changed
+            if (newValue !== originalValue) {
+                pushToUndoStack({
+                    isHeader,
+                    rowIndex,
+                    colIndex,
+                    oldValue: originalValue,
+                    newValue: newValue
+                });
+            }
+
             // Extend arrays if necessary for new columns
             if (isHeader) {
                 // Ensure header row exists and has enough columns
@@ -1194,6 +1590,230 @@
         window.clearColumnFilter = function(columnIndex) {
             delete columnFilters[columnIndex];
             applyFilters();
+        }
+
+        // Find & Replace Functions
+        function openFindReplace() {
+            if (!parsedData.data.length) return;
+
+            findReplaceModal.classList.add('show');
+            findReplaceOverlay.classList.add('show');
+            findInputElem.focus();
+            findInputElem.select();
+            findReplaceLastMatch = null;
+        }
+
+        function closeFindReplace() {
+            findReplaceModal.classList.remove('show');
+            findReplaceOverlay.classList.remove('show');
+            findReplaceStatus.textContent = '';
+        }
+
+        function findNext() {
+            const query = findInputElem.value;
+            if (!query) {
+                findReplaceStatus.textContent = 'Please enter text to find';
+                return;
+            }
+
+            const caseSensitive = caseSensitiveCheckbox.checked;
+            const searchQuery = caseSensitive ? query : query.toLowerCase();
+
+            // Start search from last match or beginning
+            let startRow = findReplaceLastMatch ? findReplaceLastMatch.rowIndex : 0;
+            let startCol = findReplaceLastMatch ? findReplaceLastMatch.colIndex + 1 : 0;
+            let startIsHeader = findReplaceLastMatch ? findReplaceLastMatch.isHeader : (filteredData.headers.length > 0);
+
+            // Search headers first
+            if (startIsHeader || !findReplaceLastMatch) {
+                for (let r = startRow; r < filteredData.headers.length; r++) {
+                    const row = filteredData.headers[r];
+                    for (let c = (r === startRow ? startCol : 0); c < row.length; c++) {
+                        const cellValue = caseSensitive ? String(row[c]) : String(row[c]).toLowerCase();
+                        if (cellValue.includes(searchQuery)) {
+                            findReplaceLastMatch = { isHeader: true, rowIndex: r, colIndex: c };
+                            highlightFoundCell(true, r, c);
+                            findReplaceStatus.textContent = `Found in header row ${r + 1}, column ${getColumnLetter(c)}`;
+                            return;
+                        }
+                    }
+                    startCol = 0;
+                }
+                // Continue to data
+                startRow = 0;
+                startCol = 0;
+            }
+
+            // Search data rows
+            for (let r = startRow; r < filteredData.data.length; r++) {
+                const row = filteredData.data[r];
+                for (let c = (r === startRow && !startIsHeader ? startCol : 0); c < row.length; c++) {
+                    const cellValue = caseSensitive ? String(row[c]) : String(row[c]).toLowerCase();
+                    if (cellValue.includes(searchQuery)) {
+                        findReplaceLastMatch = { isHeader: false, rowIndex: r, colIndex: c };
+                        highlightFoundCell(false, r, c);
+                        findReplaceStatus.textContent = `Found at row ${r + 1}, column ${getColumnLetter(c)}`;
+                        return;
+                    }
+                }
+                startCol = 0;
+            }
+
+            // Not found - wrap around
+            if (findReplaceLastMatch) {
+                findReplaceLastMatch = null;
+                findReplaceStatus.textContent = 'No more matches found. Click Find Next to start from beginning.';
+            } else {
+                findReplaceStatus.textContent = 'No matches found';
+            }
+        }
+
+        function highlightFoundCell(isHeader, rowIndex, colIndex) {
+            const cellSelector = `[data-is-header="${isHeader}"][data-row="${rowIndex}"][data-col="${colIndex}"]`;
+            const cell = tableContainer.querySelector(cellSelector);
+            if (cell) {
+                selectCell(cell, isHeader, rowIndex, colIndex);
+                cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        }
+
+        function replaceOne() {
+            if (!findReplaceLastMatch) {
+                findReplaceStatus.textContent = 'Please find a match first';
+                return;
+            }
+
+            const replaceValue = replaceInputElem.value;
+            const { isHeader, rowIndex, colIndex } = findReplaceLastMatch;
+
+            // Push to undo stack
+            const oldValue = isHeader ? filteredData.headers[rowIndex][colIndex] : filteredData.data[rowIndex][colIndex];
+            pushToUndoStack({
+                isHeader,
+                rowIndex,
+                colIndex,
+                oldValue: oldValue,
+                newValue: replaceValue
+            });
+
+            // Replace
+            if (isHeader) {
+                parsedData.headers[rowIndex][colIndex] = replaceValue;
+                filteredData.headers[rowIndex][colIndex] = replaceValue;
+            } else {
+                parsedData.data[rowIndex][colIndex] = replaceValue;
+                filteredData.data[rowIndex][colIndex] = replaceValue;
+            }
+
+            // Track modification
+            const cellId = getCellId(isHeader, rowIndex, colIndex);
+            const originalCellValue = isHeader ?
+                (originalData.headers[rowIndex]?.[colIndex] || '') :
+                (originalData.data[rowIndex]?.[colIndex] || '');
+
+            if (replaceValue !== originalCellValue) {
+                modifiedCells.add(cellId);
+            } else {
+                modifiedCells.delete(cellId);
+            }
+
+            renderTable();
+            findReplaceStatus.textContent = 'Replaced 1 occurrence';
+
+            // Find next
+            findNext();
+        }
+
+        function replaceAll() {
+            const query = findInputElem.value;
+            const replaceValue = replaceInputElem.value;
+
+            if (!query) {
+                findReplaceStatus.textContent = 'Please enter text to find';
+                return;
+            }
+
+            const caseSensitive = caseSensitiveCheckbox.checked;
+            const searchQuery = caseSensitive ? query : query.toLowerCase();
+            let replaceCount = 0;
+
+            // Replace in headers
+            for (let r = 0; r < filteredData.headers.length; r++) {
+                const row = filteredData.headers[r];
+                for (let c = 0; c < row.length; c++) {
+                    const cellValue = String(row[c]);
+                    const compareValue = caseSensitive ? cellValue : cellValue.toLowerCase();
+
+                    if (compareValue.includes(searchQuery)) {
+                        const oldValue = cellValue;
+                        const newValue = caseSensitive ?
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replaceValue) :
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), replaceValue);
+
+                        pushToUndoStack({
+                            isHeader: true,
+                            rowIndex: r,
+                            colIndex: c,
+                            oldValue: oldValue,
+                            newValue: newValue
+                        });
+
+                        parsedData.headers[r][c] = newValue;
+                        filteredData.headers[r][c] = newValue;
+
+                        const cellId = getCellId(true, r, c);
+                        const originalCellValue = originalData.headers[r]?.[c] || '';
+                        if (newValue !== originalCellValue) {
+                            modifiedCells.add(cellId);
+                        } else {
+                            modifiedCells.delete(cellId);
+                        }
+
+                        replaceCount++;
+                    }
+                }
+            }
+
+            // Replace in data
+            for (let r = 0; r < filteredData.data.length; r++) {
+                const row = filteredData.data[r];
+                for (let c = 0; c < row.length; c++) {
+                    const cellValue = String(row[c]);
+                    const compareValue = caseSensitive ? cellValue : cellValue.toLowerCase();
+
+                    if (compareValue.includes(searchQuery)) {
+                        const oldValue = cellValue;
+                        const newValue = caseSensitive ?
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replaceValue) :
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), replaceValue);
+
+                        pushToUndoStack({
+                            isHeader: false,
+                            rowIndex: r,
+                            colIndex: c,
+                            oldValue: oldValue,
+                            newValue: newValue
+                        });
+
+                        parsedData.data[r][c] = newValue;
+                        filteredData.data[r][c] = newValue;
+
+                        const cellId = getCellId(false, r, c);
+                        const originalCellValue = originalData.data[r]?.[c] || '';
+                        if (newValue !== originalCellValue) {
+                            modifiedCells.add(cellId);
+                        } else {
+                            modifiedCells.delete(cellId);
+                        }
+
+                        replaceCount++;
+                    }
+                }
+            }
+
+            renderTable();
+            findReplaceStatus.textContent = `Replaced ${replaceCount} occurrence(s)`;
+            findReplaceLastMatch = null;
         }
 
         // Column sorting function
@@ -1354,7 +1974,17 @@
             // Add click event listeners to editable cells
             const editableCells = tableContainer.querySelectorAll('.editable-cell');
             editableCells.forEach(cell => {
-                cell.addEventListener('click', function() {
+                cell.addEventListener('click', function(event) {
+                    const isHeader = this.dataset.isHeader === 'true';
+                    const rowIndex = parseInt(this.dataset.row);
+                    const colIndex = parseInt(this.dataset.col);
+
+                    // Select cell
+                    selectCell(this, isHeader, rowIndex, colIndex);
+                });
+
+                // Double-click to enter edit mode
+                cell.addEventListener('dblclick', function() {
                     const isHeader = this.dataset.isHeader === 'true';
                     const rowIndex = parseInt(this.dataset.row);
                     const colIndex = parseInt(this.dataset.col);
@@ -1519,6 +2149,9 @@
                 prevPage.disabled = currentPage === 1;
                 nextPage.disabled = currentPage === totalPages;
             }
+
+            // Update undo/redo status display
+            updateUndoRedoStatus();
         }
         
         // Navigation functions
