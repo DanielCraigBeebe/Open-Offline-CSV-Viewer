@@ -194,6 +194,89 @@
         .letter-header {
             background-color: #e8f4fc !important;
             text-align: center;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        .letter-header:hover {
+            background-color: #d0e8f7 !important;
+        }
+        .letter-header.sortable::after {
+            content: ' ⇅';
+            color: #999;
+            font-size: 0.8em;
+        }
+        .letter-header.sorted-asc::after {
+            content: ' ▲';
+            color: #0066cc;
+        }
+        .letter-header.sorted-desc::after {
+            content: ' ▼';
+            color: #0066cc;
+        }
+
+        /* Column resizing */
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 5px;
+            height: 100%;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 10;
+        }
+        .resize-handle:hover {
+            background-color: #0066cc;
+        }
+        th.resizing {
+            background-color: #d0e8f7 !important;
+        }
+
+        /* Column filtering */
+        .filter-icon {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #999;
+            z-index: 5;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .filter-icon:hover {
+            background-color: rgba(0, 102, 204, 0.1);
+            color: #0066cc;
+        }
+        .filter-icon.active {
+            color: #0066cc;
+            font-weight: bold;
+        }
+        .filter-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 10px;
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+        }
+        .filter-dropdown.show {
+            display: block;
+        }
+        .filter-dropdown input[type="text"] {
+            width: 100%;
+            margin-bottom: 8px;
+        }
+        .filter-dropdown button {
+            margin: 2px;
+            padding: 5px 10px;
+            font-size: 0.85em;
         }
         .row-number {
             background-color: #e0e0e0;
@@ -330,6 +413,30 @@
         }
         body.dark-mode .letter-header {
             background-color: #2a3b4d !important;
+        }
+        body.dark-mode .letter-header:hover {
+            background-color: #1f2f3d !important;
+        }
+        body.dark-mode .letter-header.sorted-asc::after,
+        body.dark-mode .letter-header.sorted-desc::after {
+            color: #4e8cff;
+        }
+        body.dark-mode .resize-handle:hover {
+            background-color: #4e8cff;
+        }
+        body.dark-mode th.resizing {
+            background-color: #1f2f3d !important;
+        }
+        body.dark-mode .filter-icon:hover {
+            background-color: rgba(78, 140, 255, 0.1);
+            color: #4e8cff;
+        }
+        body.dark-mode .filter-icon.active {
+            color: #4e8cff;
+        }
+        body.dark-mode .filter-dropdown {
+            background: #2c2c2c;
+            border-color: #444;
         }
         body.dark-mode .row-number {
             background-color: #333333;
@@ -652,6 +759,10 @@
         let modifiedCells = new Set(); // Track which cells have been modified
         let currentPage = 1;
         let currentEditor = null; // Track the currently editing cell
+        let sortColumn = null; // Track current sort column
+        let sortDirection = null; // Track sort direction: 'asc' or 'desc'
+        let columnWidths = {}; // Track custom column widths
+        let columnFilters = {}; // Track active filters per column
         
         // LocalStorage: Save and load user preferences
         function savePreferences() {
@@ -1006,6 +1117,135 @@
             currentEditor = null;
         }
         
+        // Apply filters to data
+        function applyFilters() {
+            if (currentEditor) saveCurrentEdit();
+
+            // Start with parsed data
+            let filtered = parsedData.data;
+
+            // Apply column filters
+            Object.keys(columnFilters).forEach(colIndex => {
+                const filterValue = columnFilters[colIndex];
+                if (filterValue && filterValue.trim()) {
+                    const lowerFilter = filterValue.toLowerCase();
+                    filtered = filtered.filter(row => {
+                        const cellValue = String(row[colIndex] || '').toLowerCase();
+                        return cellValue.includes(lowerFilter);
+                    });
+                }
+            });
+
+            // Apply global search if exists
+            const query = searchInput.value.toLowerCase();
+            if (query.trim()) {
+                filtered = filtered.filter(row =>
+                    row.some(cell => String(cell).toLowerCase().includes(query))
+                );
+            }
+
+            filteredData = {
+                headers: parsedData.headers,
+                data: filtered
+            };
+
+            // Re-apply sorting if active
+            if (sortColumn !== null && sortDirection !== null) {
+                filteredData.data.sort((a, b) => {
+                    const aVal = a[sortColumn] || '';
+                    const bVal = b[sortColumn] || '';
+                    const aNum = parseFloat(aVal);
+                    const bNum = parseFloat(bVal);
+                    let comparison = 0;
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        comparison = aNum - bNum;
+                    } else {
+                        comparison = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+                    }
+                    return sortDirection === 'asc' ? comparison : -comparison;
+                });
+            }
+
+            currentPage = 1;
+            renderTable();
+
+            // Update status
+            if (Object.keys(columnFilters).length > 0 || query.trim()) {
+                status.textContent = `Showing ${filteredData.data.length} of ${parsedData.data.length} rows`;
+                setTimeout(() => {
+                    if (status.textContent.startsWith('Showing ')) {
+                        status.textContent = '';
+                    }
+                }, 3000);
+            }
+        }
+
+        // Set column filter (globally accessible)
+        window.setColumnFilter = function(columnIndex, value) {
+            if (value && value.trim()) {
+                columnFilters[columnIndex] = value;
+            } else {
+                delete columnFilters[columnIndex];
+            }
+            applyFilters();
+        }
+
+        // Clear column filter (globally accessible)
+        window.clearColumnFilter = function(columnIndex) {
+            delete columnFilters[columnIndex];
+            applyFilters();
+        }
+
+        // Column sorting function
+        function sortByColumn(columnIndex) {
+            if (currentEditor) saveCurrentEdit();
+
+            // Toggle sort direction
+            if (sortColumn === columnIndex) {
+                if (sortDirection === 'asc') {
+                    sortDirection = 'desc';
+                } else if (sortDirection === 'desc') {
+                    // Third click: remove sort
+                    sortColumn = null;
+                    sortDirection = null;
+                    filteredData.data = [...filteredData.data]; // Trigger re-render
+                    currentPage = 1;
+                    renderTable();
+                    return;
+                } else {
+                    sortDirection = 'asc';
+                }
+            } else {
+                sortColumn = columnIndex;
+                sortDirection = 'asc';
+            }
+
+            // Sort the data
+            filteredData.data.sort((a, b) => {
+                const aVal = a[columnIndex] || '';
+                const bVal = b[columnIndex] || '';
+
+                // Try to parse as numbers
+                const aNum = parseFloat(aVal);
+                const bNum = parseFloat(bVal);
+
+                let comparison = 0;
+
+                // If both are valid numbers, compare numerically
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    comparison = aNum - bNum;
+                } else {
+                    // Otherwise compare as strings
+                    comparison = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+                }
+
+                return sortDirection === 'asc' ? comparison : -comparison;
+            });
+
+            currentPage = 1;
+            renderTable();
+        }
+
         // Render table
         function renderTable() {
             if (filteredData.data.length === 0) {
@@ -1033,9 +1273,18 @@
                 ...filteredData.data.map(row => row.length)
             );
             
-            // Add column letters
+            // Add column letters with sort indicators and filter icons
             for (let i = 0; i < maxColumns; i++) {
-                tableHTML += `<th class="letter-header">${getColumnLetter(i)}</th>`;
+                const sortClass = sortColumn === i
+                    ? (sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc')
+                    : 'sortable';
+                const width = columnWidths[i] ? `style="width: ${columnWidths[i]}px; min-width: ${columnWidths[i]}px;"` : '';
+                const filterActive = columnFilters[i] ? 'active' : '';
+                tableHTML += `<th class="letter-header ${sortClass}" data-col-index="${i}" ${width}>
+                    <span class="filter-icon ${filterActive}" data-col-index="${i}" title="Filter column">⚑</span>
+                    ${getColumnLetter(i)}
+                    <div class="resize-handle" data-col-index="${i}"></div>
+                </th>`;
             }
             tableHTML += '</tr>';
             
@@ -1082,7 +1331,8 @@
                     const cellId = getCellId(false, i, colIndex);
                     const isModified = modifiedCells.has(cellId);
                     const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
-                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${colIndex}">${cell}</td>`;
+                    const width = columnWidths[colIndex] ? `style="width: ${columnWidths[colIndex]}px; min-width: ${columnWidths[colIndex]}px;"` : '';
+                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${colIndex}" ${width}>${cell}</td>`;
                 });
                 
                 // Add empty editable cells if needed
@@ -1090,7 +1340,8 @@
                     const cellId = getCellId(false, i, j);
                     const isModified = modifiedCells.has(cellId);
                     const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
-                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${j}"></td>`;
+                    const width = columnWidths[j] ? `style="width: ${columnWidths[j]}px; min-width: ${columnWidths[j]}px;"` : '';
+                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${j}" ${width}></td>`;
                 }
                 
                 tableHTML += '</tr>';
@@ -1107,8 +1358,128 @@
                     const isHeader = this.dataset.isHeader === 'true';
                     const rowIndex = parseInt(this.dataset.row);
                     const colIndex = parseInt(this.dataset.col);
-                    
+
                     enterEditMode(this, isHeader, rowIndex, colIndex);
+                });
+            });
+
+            // Add click event listeners to column headers for sorting
+            const columnHeaders = tableContainer.querySelectorAll('.letter-header');
+            columnHeaders.forEach(header => {
+                header.addEventListener('click', function(e) {
+                    // Don't sort if clicking on resize handle or filter icon
+                    if (e.target.classList.contains('resize-handle') || e.target.classList.contains('filter-icon')) return;
+
+                    const colIndex = parseInt(this.dataset.colIndex);
+                    sortByColumn(colIndex);
+                });
+            });
+
+            // Add click event listeners to filter icons
+            const filterIcons = tableContainer.querySelectorAll('.filter-icon');
+            filterIcons.forEach(icon => {
+                icon.addEventListener('click', function(e) {
+                    e.stopPropagation();
+
+                    const colIndex = parseInt(this.dataset.colIndex);
+
+                    // Remove any existing filter dropdowns
+                    document.querySelectorAll('.filter-dropdown').forEach(d => d.remove());
+
+                    // Create filter dropdown
+                    const dropdown = document.createElement('div');
+                    dropdown.className = 'filter-dropdown show';
+                    dropdown.innerHTML = `
+                        <input type="text" placeholder="Filter..." value="${columnFilters[colIndex] || ''}" id="filter-input-${colIndex}">
+                        <div>
+                            <button onclick="setColumnFilter(${colIndex}, document.getElementById('filter-input-${colIndex}').value); this.parentElement.parentElement.remove();">Apply</button>
+                            <button onclick="clearColumnFilter(${colIndex}); this.parentElement.parentElement.remove();">Clear</button>
+                            <button onclick="this.parentElement.parentElement.remove();">Cancel</button>
+                        </div>
+                    `;
+
+                    // Position dropdown
+                    const th = this.closest('th');
+                    th.style.position = 'relative';
+                    th.appendChild(dropdown);
+
+                    // Focus input
+                    const input = dropdown.querySelector('input');
+                    input.focus();
+                    input.select();
+
+                    // Apply filter on Enter key
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            setColumnFilter(colIndex, input.value);
+                            dropdown.remove();
+                        } else if (e.key === 'Escape') {
+                            dropdown.remove();
+                        }
+                    });
+
+                    // Close dropdown when clicking outside
+                    setTimeout(() => {
+                        function closeDropdown(e) {
+                            if (!dropdown.contains(e.target)) {
+                                dropdown.remove();
+                                document.removeEventListener('click', closeDropdown);
+                            }
+                        }
+                        document.addEventListener('click', closeDropdown);
+                    }, 0);
+                });
+            });
+
+            // Add resize functionality to column headers
+            const resizeHandles = tableContainer.querySelectorAll('.resize-handle');
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const colIndex = parseInt(this.dataset.colIndex);
+                    const th = this.parentElement;
+                    const startX = e.pageX;
+                    const startWidth = th.offsetWidth;
+
+                    th.classList.add('resizing');
+
+                    function onMouseMove(e) {
+                        const diff = e.pageX - startX;
+                        const newWidth = Math.max(60, startWidth + diff);
+                        columnWidths[colIndex] = newWidth;
+
+                        // Update this column's width
+                        th.style.width = newWidth + 'px';
+                        th.style.minWidth = newWidth + 'px';
+
+                        // Update all cells in this column
+                        const allCellsInColumn = tableContainer.querySelectorAll(`td[data-col="${colIndex}"]`);
+                        allCellsInColumn.forEach(cell => {
+                            cell.style.width = newWidth + 'px';
+                            cell.style.minWidth = newWidth + 'px';
+                        });
+                    }
+
+                    function onMouseUp() {
+                        th.classList.remove('resizing');
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+
+                        // Update horizontal scroll width
+                        const table = tableContainer.querySelector('table');
+                        const horizontalScroll = tableContainer.querySelector('.horizontal-scroll');
+                        if (table && horizontalScroll) {
+                            requestAnimationFrame(() => {
+                                const tableWidth = table.offsetWidth;
+                                horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
+                            });
+                        }
+                    }
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
                 });
             });
             
@@ -1186,38 +1557,9 @@
             }
         }
         
-        // Search function
+        // Search function (now uses applyFilters)
         function search() {
-            if (currentEditor) saveCurrentEdit();
-            if (!parsedData.data.length) return;
-            
-            const query = searchInput.value.toLowerCase();
-
-            if (!query.trim()) {
-                filteredData = JSON.parse(JSON.stringify(parsedData)); // Deep copy
-            } else {
-                const filteredRows = parsedData.data.filter(row => 
-                    row.some(cell => String(cell).toLowerCase().includes(query))
-                );
-                
-                filteredData = {
-                    headers: parsedData.headers,
-                    data: filteredRows
-                };
-            }
-            
-            currentPage = 1;
-            renderTable();
-            
-            // Show result count in status
-            if (query.trim()) {
-                status.textContent = `Found ${filteredData.data.length} matching rows`;
-                setTimeout(() => {
-                    if (status.textContent.startsWith('Found ')) {
-                        status.textContent = '';
-                    }
-                }, 3000);
-            }
+            applyFilters();
         }
         
         // Save changes permanently
