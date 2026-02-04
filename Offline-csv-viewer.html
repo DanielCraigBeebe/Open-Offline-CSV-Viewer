@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSV Viewer with Editing</title>
     <style>
         body {
@@ -62,6 +64,14 @@
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+
+        /* Row hover highlighting */
+        tbody tr:hover {
+            background-color: #e3f2fd !important;
+        }
+        tbody tr:hover td {
+            background-color: inherit;
+        }
         
         /* Editable cell styles */
         .editable-cell {
@@ -88,6 +98,11 @@
             height: 0;
             border-left: 6px solid transparent;
             border-top: 6px solid #4caf50;
+        }
+        .editable-cell.selected {
+            outline: 2px solid #0066cc;
+            outline-offset: -2px;
+            background-color: #e3f2fd !important;
         }
         
         /* Edit input styles */
@@ -184,7 +199,208 @@
         .letter-header {
             background-color: #e8f4fc !important;
             text-align: center;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
         }
+        .letter-header:hover {
+            background-color: #d0e8f7 !important;
+        }
+        .letter-header.sortable::after {
+            content: ' ⇅';
+            color: #999;
+            font-size: 0.8em;
+        }
+        .letter-header.sorted-asc::after {
+            content: ' ▲';
+            color: #0066cc;
+        }
+        .letter-header.sorted-desc::after {
+            content: ' ▼';
+            color: #0066cc;
+        }
+
+        /* Column resizing */
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 5px;
+            height: 100%;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 10;
+        }
+        .resize-handle:hover {
+            background-color: #0066cc;
+        }
+        th.resizing {
+            background-color: #d0e8f7 !important;
+        }
+
+        /* Column filtering */
+        .filter-icon {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #999;
+            z-index: 5;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .filter-icon:hover {
+            background-color: rgba(0, 102, 204, 0.1);
+            color: #0066cc;
+        }
+        .filter-icon.active {
+            color: #0066cc;
+            font-weight: bold;
+        }
+        .filter-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 10px;
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+        }
+        .filter-dropdown.show {
+            display: block;
+        }
+        .filter-dropdown input[type="text"] {
+            width: 100%;
+            margin-bottom: 8px;
+        }
+        .filter-dropdown button {
+            margin: 2px;
+            padding: 5px 10px;
+            font-size: 0.85em;
+        }
+
+        /* Find & Replace Modal */
+        .find-replace-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            padding: 20px;
+            min-width: 400px;
+            z-index: 2000;
+        }
+        .find-replace-modal.show {
+            display: block;
+        }
+        .find-replace-modal h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .find-replace-modal label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .find-replace-modal input[type="text"] {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .find-replace-modal .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .find-replace-modal .button-group button {
+            flex: 1;
+            min-width: 80px;
+        }
+        .find-replace-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1999;
+        }
+        .find-replace-overlay.show {
+            display: block;
+        }
+
+        /* Keyboard Shortcuts Help Modal */
+        .help-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            padding: 20px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 2000;
+        }
+        .help-modal.show {
+            display: block;
+        }
+        .help-modal h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .help-modal table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .help-modal td, .help-modal th {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .help-modal kbd {
+            background-color: #f4f4f4;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .help-modal button {
+            margin-top: 15px;
+        }
+        .help-icon {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background-color: #0066cc;
+            color: white;
+            border-radius: 50%;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        .help-icon:hover {
+            background-color: #0052a3;
+        }
+
         .row-number {
             background-color: #e0e0e0;
             font-weight: bold;
@@ -312,8 +528,70 @@
         body.dark-mode tr:nth-child(even) {
             background-color: #252525;
         }
+        body.dark-mode tbody tr:hover {
+            background-color: #1a3a5c !important;
+        }
+        body.dark-mode tbody tr:hover td {
+            background-color: inherit;
+        }
         body.dark-mode .letter-header {
             background-color: #2a3b4d !important;
+        }
+        body.dark-mode .letter-header:hover {
+            background-color: #1f2f3d !important;
+        }
+        body.dark-mode .letter-header.sorted-asc::after,
+        body.dark-mode .letter-header.sorted-desc::after {
+            color: #4e8cff;
+        }
+        body.dark-mode .resize-handle:hover {
+            background-color: #4e8cff;
+        }
+        body.dark-mode th.resizing {
+            background-color: #1f2f3d !important;
+        }
+        body.dark-mode .filter-icon:hover {
+            background-color: rgba(78, 140, 255, 0.1);
+            color: #4e8cff;
+        }
+        body.dark-mode .filter-icon.active {
+            color: #4e8cff;
+        }
+        body.dark-mode .filter-dropdown {
+            background: #2c2c2c;
+            border-color: #444;
+        }
+        body.dark-mode .find-replace-modal {
+            background: #2c2c2c;
+            border-color: #444;
+        }
+        body.dark-mode .find-replace-modal h3 {
+            color: #e0e0e0;
+        }
+        body.dark-mode .find-replace-modal label {
+            color: #e0e0e0;
+        }
+        body.dark-mode .help-modal {
+            background: #2c2c2c;
+            border-color: #444;
+        }
+        body.dark-mode .help-modal h3 {
+            color: #e0e0e0;
+        }
+        body.dark-mode .help-modal td, body.dark-mode .help-modal th {
+            color: #e0e0e0;
+            border-bottom-color: #444;
+        }
+        body.dark-mode .help-modal kbd {
+            background-color: #1e1e1e;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+        body.dark-mode .help-icon {
+            background-color: #4e8cff;
+        }
+        body.dark-mode .help-icon:hover {
+            background-color: #3a7be0;
         }
         body.dark-mode .row-number {
             background-color: #333333;
@@ -357,11 +635,155 @@
             color: #e0e0e0;
             outline-color: #4e8cff;
         }
+        body.dark-mode .editable-cell.selected {
+            outline-color: #4e8cff;
+            background-color: #1a3a5c !important;
+        }
         body.dark-mode #saveButton {
             background-color: #4caf50;
         }
         body.dark-mode #saveButton:hover {
             background-color: #45a049;
+        }
+
+        /* Responsive CSS for scaling to browser size */
+        @media screen and (max-width: 1200px) {
+            .container {
+                max-width: 100%;
+                margin: 10px;
+                padding: 15px;
+            }
+        }
+
+        @media screen and (max-width: 768px) {
+            body {
+                margin: 10px;
+            }
+
+            .container {
+                margin: 5px;
+                padding: 10px;
+                border-radius: 4px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+                margin-bottom: 15px;
+            }
+
+            /* Make table cells more compact on mobile */
+            th, td {
+                min-width: 80px;
+                padding: 6px;
+                font-size: 0.9rem;
+            }
+
+            /* Make controls stack better on mobile */
+            .controls {
+                gap: 8px;
+            }
+
+            .controls > div {
+                width: 100%;
+            }
+
+            .controls select,
+            .controls input {
+                width: 100%;
+            }
+
+            .search-container {
+                width: 100%;
+                margin-left: 0;
+            }
+
+            #searchInput {
+                flex: 1;
+            }
+
+            /* Make buttons full width on mobile */
+            button {
+                padding: 8px 15px;
+                font-size: 0.9rem;
+            }
+
+            /* Pagination controls */
+            .page-nav {
+                font-size: 0.9rem;
+            }
+
+            .jump-page {
+                display: block;
+                margin-top: 10px;
+                margin-left: 0;
+            }
+
+            #jumpPageInput {
+                width: 80px;
+            }
+        }
+
+        @media screen and (max-width: 480px) {
+            body {
+                margin: 5px;
+            }
+
+            .container {
+                margin: 0;
+                padding: 8px;
+                border-radius: 0;
+            }
+
+            h1 {
+                font-size: 1.2rem;
+                margin-bottom: 10px;
+            }
+
+            /* Even more compact on very small screens */
+            th, td {
+                min-width: 60px;
+                padding: 4px;
+                font-size: 0.85rem;
+            }
+
+            .file-area {
+                padding: 15px 10px;
+            }
+
+            button {
+                padding: 8px 12px;
+                font-size: 0.85rem;
+            }
+
+            /* Make action buttons stack */
+            #actions {
+                flex-direction: column;
+            }
+
+            #actions button {
+                width: 100%;
+                margin: 5px 0;
+            }
+
+            .data-info,
+            .edit-info {
+                font-size: 0.85rem;
+                padding: 6px;
+            }
+        }
+
+        /* Ensure container scales with browser window */
+        html, body {
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        .container {
+            box-sizing: border-box;
+        }
+
+        * {
+            box-sizing: border-box;
         }
     </style>
 </head>
@@ -370,11 +792,12 @@
         <h1>CSV/TSV Viewer with Editing</h1>
         
         <div class="file-area">
-            <p>Select a CSV or TSV file to view:</p>
+            <p>Select a CSV or TSV file to view, or paste from clipboard:</p>
             <div class="file-input-container">
                 <span class="file-input-button">Choose File</span>
                 <input type="file" id="fileInput" accept=".csv,.tsv,.txt">
             </div>
+            <button id="pasteClipboardButton">Paste CSV from Clipboard</button>
             <div id="fileName"></div>
         </div>
         
@@ -453,15 +876,118 @@
         <div id="actions" class="hidden controls">
             <button id="saveButton">Save Changes</button>
             <button id="exportButton">Export CSV</button>
+            <button id="exportJSONButton">Export JSON</button>
             <button id="copyButton">Copy to Clipboard</button>
             <button id="resetButton">Reset All Changes</button>
+            <button id="findReplaceButton">Find & Replace (Ctrl+F)</button>
         </div>
     </div>
-    
+
+    <!-- Find & Replace Modal -->
+    <div class="find-replace-overlay" id="findReplaceOverlay"></div>
+    <div class="find-replace-modal" id="findReplaceModal">
+        <h3>Find & Replace</h3>
+        <label for="findInput">Find:</label>
+        <input type="text" id="findInput" placeholder="Enter text to find...">
+
+        <label for="replaceInput">Replace with:</label>
+        <input type="text" id="replaceInput" placeholder="Enter replacement text...">
+
+        <div style="margin-bottom: 15px;">
+            <label>
+                <input type="checkbox" id="caseSensitiveCheckbox">
+                Case sensitive
+            </label>
+        </div>
+
+        <div class="button-group">
+            <button id="findNextButton">Find Next</button>
+            <button id="replaceButton">Replace</button>
+            <button id="replaceAllButton">Replace All</button>
+            <button id="closeFindReplaceButton">Close</button>
+        </div>
+
+        <div id="findReplaceStatus" class="status"></div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="find-replace-overlay" id="helpOverlay"></div>
+    <div class="help-modal" id="helpModal">
+        <h3>Keyboard Shortcuts</h3>
+        <table>
+            <tr>
+                <th>Action</th>
+                <th>Shortcut</th>
+            </tr>
+            <tr>
+                <td>Undo</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Z</kbd> (or <kbd>Cmd</kbd>+<kbd>Z</kbd>)</td>
+            </tr>
+            <tr>
+                <td>Redo</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Y</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td>
+            </tr>
+            <tr>
+                <td>Find & Replace</td>
+                <td><kbd>Ctrl</kbd>+<kbd>F</kbd> (or <kbd>Cmd</kbd>+<kbd>F</kbd>)</td>
+            </tr>
+            <tr>
+                <td>Navigate Up</td>
+                <td><kbd>↑</kbd> Arrow Up</td>
+            </tr>
+            <tr>
+                <td>Navigate Down</td>
+                <td><kbd>↓</kbd> Arrow Down</td>
+            </tr>
+            <tr>
+                <td>Navigate Left</td>
+                <td><kbd>←</kbd> Arrow Left</td>
+            </tr>
+            <tr>
+                <td>Navigate Right</td>
+                <td><kbd>→</kbd> Arrow Right or <kbd>Tab</kbd></td>
+            </tr>
+            <tr>
+                <td>Navigate Left (Backwards)</td>
+                <td><kbd>Shift</kbd>+<kbd>Tab</kbd></td>
+            </tr>
+            <tr>
+                <td>Edit Selected Cell</td>
+                <td><kbd>Enter</kbd> or double-click</td>
+            </tr>
+            <tr>
+                <td>Cancel Edit</td>
+                <td><kbd>Esc</kbd></td>
+            </tr>
+        </table>
+
+        <h3 style="margin-top: 20px;">Features</h3>
+        <table>
+            <tr>
+                <td>Column Sorting</td>
+                <td>Click column header (A, B, C, etc.)</td>
+            </tr>
+            <tr>
+                <td>Column Resizing</td>
+                <td>Drag right edge of column header</td>
+            </tr>
+            <tr>
+                <td>Column Filtering</td>
+                <td>Click filter icon (⚑) in column header</td>
+            </tr>
+        </table>
+
+        <button id="closeHelpButton">Close</button>
+    </div>
+
+    <!-- Floating Help Button -->
+    <button class="help-icon" id="helpIcon" title="Keyboard Shortcuts (?)">?</button>
+
     <script>
         // DOM elements
         const fileInput = document.getElementById('fileInput');
         const fileName = document.getElementById('fileName');
+        const pasteClipboardButton = document.getElementById('pasteClipboardButton');
         const options = document.getElementById('options');
         const delimiter = document.getElementById('delimiter');
         const headerRows = document.getElementById('headerRows');
@@ -483,29 +1009,96 @@
         const actions = document.getElementById('actions');
         const saveButton = document.getElementById('saveButton');
         const exportButton = document.getElementById('exportButton');
+        const exportJSONButton = document.getElementById('exportJSONButton');
         const copyButton = document.getElementById('copyButton');
         const resetButton = document.getElementById('resetButton');
         const darkModeToggle = document.getElementById('darkModeToggle');
-        
+        const findReplaceButton = document.getElementById('findReplaceButton');
+        const findReplaceModal = document.getElementById('findReplaceModal');
+        const findReplaceOverlay = document.getElementById('findReplaceOverlay');
+        const findInputElem = document.getElementById('findInput');
+        const replaceInputElem = document.getElementById('replaceInput');
+        const caseSensitiveCheckbox = document.getElementById('caseSensitiveCheckbox');
+        const findNextButton = document.getElementById('findNextButton');
+        const replaceButton = document.getElementById('replaceButton');
+        const replaceAllButton = document.getElementById('replaceAllButton');
+        const closeFindReplaceButton = document.getElementById('closeFindReplaceButton');
+        const findReplaceStatus = document.getElementById('findReplaceStatus');
+        const helpIcon = document.getElementById('helpIcon');
+        const helpModal = document.getElementById('helpModal');
+        const helpOverlay = document.getElementById('helpOverlay');
+        const closeHelpButton = document.getElementById('closeHelpButton');
+
         // Global variables
         let fileContent = null;
+        let originalFileName = 'export.csv'; // Store original filename for export
         let parsedData = { data: [], headers: [] };
         let filteredData = { data: [], headers: [] };
         let originalData = { data: [], headers: [] }; // Store original data for reset
         let modifiedCells = new Set(); // Track which cells have been modified
         let currentPage = 1;
         let currentEditor = null; // Track the currently editing cell
+        let sortColumn = null; // Track current sort column
+        let sortDirection = null; // Track sort direction: 'asc' or 'desc'
+        let columnWidths = {}; // Track custom column widths
+        let columnFilters = {}; // Track active filters per column
+        let undoStack = []; // Undo history
+        let redoStack = []; // Redo history
+        const MAX_UNDO_STACK = 50; // Limit undo history to prevent memory issues
+        let selectedCell = null; // Track selected cell for keyboard navigation: {isHeader, rowIndex, colIndex, element}
+        let findReplaceLastMatch = null; // Track last find match for "Find Next"
         
-        // Set dark mode by default
-        document.body.classList.add('dark-mode');
-        
+        // LocalStorage: Save and load user preferences
+        function savePreferences() {
+            const preferences = {
+                darkMode: darkModeToggle.checked,
+                rowsPerPage: rowsPerPage.value,
+                delimiter: delimiter.value,
+                headerRows: headerRows.value
+            };
+            localStorage.setItem('csvViewerPreferences', JSON.stringify(preferences));
+        }
+
+        function loadPreferences() {
+            try {
+                const saved = localStorage.getItem('csvViewerPreferences');
+                if (saved) {
+                    const preferences = JSON.parse(saved);
+
+                    // Apply dark mode preference
+                    if (preferences.darkMode !== undefined) {
+                        darkModeToggle.checked = preferences.darkMode;
+                        document.body.classList.toggle('dark-mode', preferences.darkMode);
+                    } else {
+                        // Default to dark mode if no preference
+                        darkModeToggle.checked = true;
+                        document.body.classList.add('dark-mode');
+                    }
+
+                    // Apply other preferences
+                    if (preferences.rowsPerPage) rowsPerPage.value = preferences.rowsPerPage;
+                    if (preferences.delimiter) delimiter.value = preferences.delimiter;
+                    if (preferences.headerRows) headerRows.value = preferences.headerRows;
+                }
+            } catch (e) {
+                console.error('Failed to load preferences:', e);
+                // Default to dark mode on error
+                darkModeToggle.checked = true;
+                document.body.classList.add('dark-mode');
+            }
+        }
+
+        // Load preferences on page load
+        loadPreferences();
+
         // Event listeners
         fileInput.addEventListener('change', function() {
             if (this.files.length) {
                 handleFile(this.files[0]);
             }
         });
-        
+
+        pasteClipboardButton.addEventListener('click', pasteFromClipboard);
         parseButton.addEventListener('click', parseFile);
         prevPage.addEventListener('click', prevPageClick);
         nextPage.addEventListener('click', nextPageClick);
@@ -513,9 +1106,29 @@
         searchButton.addEventListener('click', search);
         saveButton.addEventListener('click', saveChanges);
         exportButton.addEventListener('click', exportData);
+        exportJSONButton.addEventListener('click', exportJSON);
         copyButton.addEventListener('click', copyToClipboard);
         resetButton.addEventListener('click', resetAllChanges);
         darkModeToggle.addEventListener('change', toggleDarkMode);
+        findReplaceButton.addEventListener('click', openFindReplace);
+        closeFindReplaceButton.addEventListener('click', closeFindReplace);
+        findReplaceOverlay.addEventListener('click', closeFindReplace);
+        findNextButton.addEventListener('click', findNext);
+        replaceButton.addEventListener('click', replaceOne);
+        replaceAllButton.addEventListener('click', replaceAll);
+        helpIcon.addEventListener('click', openHelp);
+        closeHelpButton.addEventListener('click', closeHelp);
+        helpOverlay.addEventListener('click', closeHelp);
+
+        // Save preferences when settings change
+        delimiter.addEventListener('change', savePreferences);
+        headerRows.addEventListener('change', savePreferences);
+        rowsPerPage.addEventListener('change', () => {
+            savePreferences();
+            if (parsedData.data.length > 0) {
+                renderTable(); // Re-render to apply new page size
+            }
+        });
         
         // Add Enter key event listeners for search and jump to page
         searchInput.addEventListener('keydown', function(event) {
@@ -539,17 +1152,78 @@
             }
         });
         
-        // Global keydown handler for escape key
+        // Global keydown handler for escape key, undo/redo, and keyboard navigation
         document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && currentEditor) {
-                cancelCurrentEdit();
+            // Don't interfere with editing or input fields
+            if (currentEditor || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.tagName === 'SELECT') {
+                if (event.key === 'Escape' && currentEditor) {
+                    cancelCurrentEdit();
+                }
+                return;
+            }
+
+            // Undo: Ctrl+Z (or Cmd+Z on Mac)
+            if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+                event.preventDefault();
+                undo();
+                return;
+            }
+
+            // Redo: Ctrl+Y or Ctrl+Shift+Z (or Cmd on Mac)
+            if (((event.ctrlKey || event.metaKey) && event.key === 'y') ||
+                ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'z')) {
+                event.preventDefault();
+                redo();
+                return;
+            }
+
+            // Find & Replace: Ctrl+F (or Cmd+F on Mac)
+            if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+                event.preventDefault();
+                openFindReplace();
+                return;
+            }
+
+            // Keyboard navigation (only when a cell is selected and not editing)
+            if (selectedCell && !currentEditor) {
+                let handled = false;
+
+                // Arrow key navigation
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    navigateCell('up');
+                    handled = true;
+                } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    navigateCell('down');
+                    handled = true;
+                } else if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    navigateCell('left');
+                    handled = true;
+                } else if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    navigateCell('right');
+                    handled = true;
+                } else if (event.key === 'Tab') {
+                    event.preventDefault();
+                    navigateCell(event.shiftKey ? 'left' : 'right');
+                    handled = true;
+                } else if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (selectedCell && selectedCell.element) {
+                        enterEditMode(selectedCell.element, selectedCell.isHeader, selectedCell.rowIndex, selectedCell.colIndex);
+                    }
+                    handled = true;
+                }
             }
         });
         
         // File handling
         function handleFile(file) {
             fileName.textContent = file.name;
-            
+            originalFileName = file.name; // Store for export
+
             // Auto-detect delimiter based on file extension
             const fileExt = file.name.split('.').pop().toLowerCase();
             if (fileExt === 'tsv') {
@@ -557,7 +1231,7 @@
             } else if (fileExt === 'csv') {
                 delimiter.value = ',';
             }
-            
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 fileContent = e.target.result;
@@ -570,6 +1244,28 @@
                 error.classList.remove('hidden');
             };
             reader.readAsText(file);
+        }
+
+        // Paste from clipboard
+        async function pasteFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (!text || !text.trim()) {
+                    error.textContent = 'Clipboard is empty';
+                    error.classList.remove('hidden');
+                    return;
+                }
+
+                fileContent = text;
+                fileName.textContent = 'Pasted from clipboard';
+                originalFileName = 'clipboard-export.csv';
+                options.classList.remove('hidden');
+                status.textContent = 'CSV pasted from clipboard. Click "Parse File" to view.';
+                error.classList.add('hidden');
+            } catch (err) {
+                error.textContent = 'Failed to read clipboard: ' + err.message;
+                error.classList.remove('hidden');
+            }
         }
         
         // Parse file
@@ -655,8 +1351,10 @@
             
             parsedData = { data, headers };
             originalData = JSON.parse(JSON.stringify(parsedData)); // Deep copy for reset
-            filteredData = { ...parsedData };
+            filteredData = JSON.parse(JSON.stringify(parsedData)); // Deep copy
             modifiedCells.clear(); // Clear any previous modifications
+            undoStack = []; // Clear undo history
+            redoStack = []; // Clear redo history
             
             // Display information
             dataInfo.innerHTML = `<strong>Dataset:</strong> ${data.length} rows × ${data[0]?.length || 0} columns`;
@@ -687,6 +1385,206 @@
             return `${isHeader ? 'h' : 'd'}_${rowIndex}_${colIndex}`;
         }
         
+        // Keyboard Navigation
+        function selectCell(cell, isHeader, rowIndex, colIndex) {
+            // Deselect previous cell
+            if (selectedCell && selectedCell.element) {
+                selectedCell.element.classList.remove('selected');
+            }
+
+            // Select new cell
+            if (cell) {
+                cell.classList.add('selected');
+                selectedCell = { element: cell, isHeader, rowIndex, colIndex };
+
+                // Scroll cell into view if needed
+                cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            } else {
+                selectedCell = null;
+            }
+        }
+
+        function navigateCell(direction) {
+            if (!selectedCell) return;
+
+            const { isHeader, rowIndex, colIndex } = selectedCell;
+            let newIsHeader = isHeader;
+            let newRowIndex = rowIndex;
+            let newColIndex = colIndex;
+
+            // Calculate the max columns for the current table
+            const maxColumns = Math.max(
+                ...filteredData.headers.map(row => row.length),
+                ...filteredData.data.map(row => row.length)
+            );
+
+            // Calculate total displayable rows
+            const rowsPerPageValue = parseInt(rowsPerPage.value);
+            const startIndex = rowsPerPageValue === -1 ? 0 : (currentPage - 1) * rowsPerPageValue;
+            const endIndex = rowsPerPageValue === -1 ? filteredData.data.length : Math.min(startIndex + rowsPerPageValue, filteredData.data.length);
+            const displayedDataRows = endIndex - startIndex;
+
+            switch (direction) {
+                case 'up':
+                    if (isHeader) {
+                        if (rowIndex > 0) {
+                            newRowIndex = rowIndex - 1;
+                        }
+                    } else {
+                        if (rowIndex > startIndex) {
+                            newRowIndex = rowIndex - 1;
+                        } else if (filteredData.headers.length > 0) {
+                            newIsHeader = true;
+                            newRowIndex = filteredData.headers.length - 1;
+                        }
+                    }
+                    break;
+
+                case 'down':
+                    if (isHeader) {
+                        if (rowIndex < filteredData.headers.length - 1) {
+                            newRowIndex = rowIndex + 1;
+                        } else if (displayedDataRows > 0) {
+                            newIsHeader = false;
+                            newRowIndex = startIndex;
+                        }
+                    } else {
+                        if (rowIndex < endIndex - 1) {
+                            newRowIndex = rowIndex + 1;
+                        }
+                    }
+                    break;
+
+                case 'left':
+                    if (newColIndex > 0) {
+                        newColIndex = newColIndex - 1;
+                    }
+                    break;
+
+                case 'right':
+                    if (newColIndex < maxColumns - 1) {
+                        newColIndex = newColIndex + 1;
+                    }
+                    break;
+            }
+
+            // Find and select the new cell
+            const cellSelector = `[data-is-header="${newIsHeader}"][data-row="${newRowIndex}"][data-col="${newColIndex}"]`;
+            const newCell = tableContainer.querySelector(cellSelector);
+
+            if (newCell) {
+                selectCell(newCell, newIsHeader, newRowIndex, newColIndex);
+            }
+        }
+
+        // Undo/Redo System
+        function pushToUndoStack(action) {
+            undoStack.push(action);
+            if (undoStack.length > MAX_UNDO_STACK) {
+                undoStack.shift(); // Remove oldest entry
+            }
+            redoStack = []; // Clear redo stack when new action is performed
+            updateUndoRedoStatus();
+        }
+
+        function undo() {
+            if (currentEditor) saveCurrentEdit();
+            if (undoStack.length === 0) {
+                status.textContent = 'Nothing to undo';
+                setTimeout(() => { status.textContent = ''; }, 1500);
+                return;
+            }
+
+            const action = undoStack.pop();
+            redoStack.push(action);
+
+            // Apply the undo
+            const { isHeader, rowIndex, colIndex, oldValue, newValue } = action;
+
+            if (isHeader) {
+                if (!parsedData.headers[rowIndex]) parsedData.headers[rowIndex] = [];
+                parsedData.headers[rowIndex][colIndex] = oldValue;
+                if (!filteredData.headers[rowIndex]) filteredData.headers[rowIndex] = [];
+                filteredData.headers[rowIndex][colIndex] = oldValue;
+            } else {
+                if (!parsedData.data[rowIndex]) parsedData.data[rowIndex] = [];
+                parsedData.data[rowIndex][colIndex] = oldValue;
+                if (!filteredData.data[rowIndex]) filteredData.data[rowIndex] = [];
+                filteredData.data[rowIndex][colIndex] = oldValue;
+            }
+
+            // Update modified cells tracking
+            const cellId = getCellId(isHeader, rowIndex, colIndex);
+            const originalCellValue = isHeader ?
+                (originalData.headers[rowIndex]?.[colIndex] || '') :
+                (originalData.data[rowIndex]?.[colIndex] || '');
+
+            if (oldValue !== originalCellValue) {
+                modifiedCells.add(cellId);
+            } else {
+                modifiedCells.delete(cellId);
+            }
+
+            renderTable();
+            updateUndoRedoStatus();
+            status.textContent = 'Undo applied';
+            setTimeout(() => { status.textContent = ''; }, 1500);
+        }
+
+        function redo() {
+            if (currentEditor) saveCurrentEdit();
+            if (redoStack.length === 0) {
+                status.textContent = 'Nothing to redo';
+                setTimeout(() => { status.textContent = ''; }, 1500);
+                return;
+            }
+
+            const action = redoStack.pop();
+            undoStack.push(action);
+
+            // Apply the redo
+            const { isHeader, rowIndex, colIndex, oldValue, newValue } = action;
+
+            if (isHeader) {
+                if (!parsedData.headers[rowIndex]) parsedData.headers[rowIndex] = [];
+                parsedData.headers[rowIndex][colIndex] = newValue;
+                if (!filteredData.headers[rowIndex]) filteredData.headers[rowIndex] = [];
+                filteredData.headers[rowIndex][colIndex] = newValue;
+            } else {
+                if (!parsedData.data[rowIndex]) parsedData.data[rowIndex] = [];
+                parsedData.data[rowIndex][colIndex] = newValue;
+                if (!filteredData.data[rowIndex]) filteredData.data[rowIndex] = [];
+                filteredData.data[rowIndex][colIndex] = newValue;
+            }
+
+            // Update modified cells tracking
+            const cellId = getCellId(isHeader, rowIndex, colIndex);
+            const originalCellValue = isHeader ?
+                (originalData.headers[rowIndex]?.[colIndex] || '') :
+                (originalData.data[rowIndex]?.[colIndex] || '');
+
+            if (newValue !== originalCellValue) {
+                modifiedCells.add(cellId);
+            } else {
+                modifiedCells.delete(cellId);
+            }
+
+            renderTable();
+            updateUndoRedoStatus();
+            status.textContent = 'Redo applied';
+            setTimeout(() => { status.textContent = ''; }, 1500);
+        }
+
+        function updateUndoRedoStatus() {
+            // Update data info to show undo/redo availability
+            if (dataInfo && !dataInfo.classList.contains('hidden')) {
+                const undoText = undoStack.length > 0 ? ` | Undo: ${undoStack.length}` : '';
+                const redoText = redoStack.length > 0 ? ` | Redo: ${redoStack.length}` : '';
+                const baseText = dataInfo.innerHTML.split(' | Undo')[0];
+                dataInfo.innerHTML = baseText + undoText + redoText;
+            }
+        }
+
         // Enter edit mode for a cell
         function enterEditMode(cell, isHeader, rowIndex, colIndex) {
             if (currentEditor) {
@@ -731,10 +1629,21 @@
         // Save current edit
         function saveCurrentEdit() {
             if (!currentEditor) return;
-            
+
             const { cell, editor, originalValue, isHeader, rowIndex, colIndex } = currentEditor;
             const newValue = editor.value;
-            
+
+            // Only push to undo stack if value actually changed
+            if (newValue !== originalValue) {
+                pushToUndoStack({
+                    isHeader,
+                    rowIndex,
+                    colIndex,
+                    oldValue: originalValue,
+                    newValue: newValue
+                });
+            }
+
             // Extend arrays if necessary for new columns
             if (isHeader) {
                 // Ensure header row exists and has enough columns
@@ -798,6 +1707,359 @@
             currentEditor = null;
         }
         
+        // Apply filters to data
+        function applyFilters() {
+            if (currentEditor) saveCurrentEdit();
+
+            // Start with parsed data
+            let filtered = parsedData.data;
+
+            // Apply column filters
+            Object.keys(columnFilters).forEach(colIndex => {
+                const filterValue = columnFilters[colIndex];
+                if (filterValue && filterValue.trim()) {
+                    const lowerFilter = filterValue.toLowerCase();
+                    filtered = filtered.filter(row => {
+                        const cellValue = String(row[colIndex] || '').toLowerCase();
+                        return cellValue.includes(lowerFilter);
+                    });
+                }
+            });
+
+            // Apply global search if exists
+            const query = searchInput.value.toLowerCase();
+            if (query.trim()) {
+                filtered = filtered.filter(row =>
+                    row.some(cell => String(cell).toLowerCase().includes(query))
+                );
+            }
+
+            filteredData = {
+                headers: parsedData.headers,
+                data: filtered
+            };
+
+            // Re-apply sorting if active
+            if (sortColumn !== null && sortDirection !== null) {
+                filteredData.data.sort((a, b) => {
+                    const aVal = a[sortColumn] || '';
+                    const bVal = b[sortColumn] || '';
+                    const aNum = parseFloat(aVal);
+                    const bNum = parseFloat(bVal);
+                    let comparison = 0;
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        comparison = aNum - bNum;
+                    } else {
+                        comparison = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+                    }
+                    return sortDirection === 'asc' ? comparison : -comparison;
+                });
+            }
+
+            currentPage = 1;
+            renderTable();
+
+            // Update status
+            if (Object.keys(columnFilters).length > 0 || query.trim()) {
+                status.textContent = `Showing ${filteredData.data.length} of ${parsedData.data.length} rows`;
+                setTimeout(() => {
+                    if (status.textContent.startsWith('Showing ')) {
+                        status.textContent = '';
+                    }
+                }, 3000);
+            }
+        }
+
+        // Set column filter (globally accessible)
+        window.setColumnFilter = function(columnIndex, value) {
+            if (value && value.trim()) {
+                columnFilters[columnIndex] = value;
+            } else {
+                delete columnFilters[columnIndex];
+            }
+            applyFilters();
+        }
+
+        // Clear column filter (globally accessible)
+        window.clearColumnFilter = function(columnIndex) {
+            delete columnFilters[columnIndex];
+            applyFilters();
+        }
+
+        // Find & Replace Functions
+        function openFindReplace() {
+            if (!parsedData.data.length) return;
+
+            findReplaceModal.classList.add('show');
+            findReplaceOverlay.classList.add('show');
+            findInputElem.focus();
+            findInputElem.select();
+            findReplaceLastMatch = null;
+        }
+
+        function closeFindReplace() {
+            findReplaceModal.classList.remove('show');
+            findReplaceOverlay.classList.remove('show');
+            findReplaceStatus.textContent = '';
+        }
+
+        function findNext() {
+            const query = findInputElem.value;
+            if (!query) {
+                findReplaceStatus.textContent = 'Please enter text to find';
+                return;
+            }
+
+            const caseSensitive = caseSensitiveCheckbox.checked;
+            const searchQuery = caseSensitive ? query : query.toLowerCase();
+
+            // Start search from last match or beginning
+            let startRow = findReplaceLastMatch ? findReplaceLastMatch.rowIndex : 0;
+            let startCol = findReplaceLastMatch ? findReplaceLastMatch.colIndex + 1 : 0;
+            let startIsHeader = findReplaceLastMatch ? findReplaceLastMatch.isHeader : (filteredData.headers.length > 0);
+
+            // Search headers first
+            if (startIsHeader || !findReplaceLastMatch) {
+                for (let r = startRow; r < filteredData.headers.length; r++) {
+                    const row = filteredData.headers[r];
+                    for (let c = (r === startRow ? startCol : 0); c < row.length; c++) {
+                        const cellValue = caseSensitive ? String(row[c]) : String(row[c]).toLowerCase();
+                        if (cellValue.includes(searchQuery)) {
+                            findReplaceLastMatch = { isHeader: true, rowIndex: r, colIndex: c };
+                            highlightFoundCell(true, r, c);
+                            findReplaceStatus.textContent = `Found in header row ${r + 1}, column ${getColumnLetter(c)}`;
+                            return;
+                        }
+                    }
+                    startCol = 0;
+                }
+                // Continue to data
+                startRow = 0;
+                startCol = 0;
+            }
+
+            // Search data rows
+            for (let r = startRow; r < filteredData.data.length; r++) {
+                const row = filteredData.data[r];
+                for (let c = (r === startRow && !startIsHeader ? startCol : 0); c < row.length; c++) {
+                    const cellValue = caseSensitive ? String(row[c]) : String(row[c]).toLowerCase();
+                    if (cellValue.includes(searchQuery)) {
+                        findReplaceLastMatch = { isHeader: false, rowIndex: r, colIndex: c };
+                        highlightFoundCell(false, r, c);
+                        findReplaceStatus.textContent = `Found at row ${r + 1}, column ${getColumnLetter(c)}`;
+                        return;
+                    }
+                }
+                startCol = 0;
+            }
+
+            // Not found - wrap around
+            if (findReplaceLastMatch) {
+                findReplaceLastMatch = null;
+                findReplaceStatus.textContent = 'No more matches found. Click Find Next to start from beginning.';
+            } else {
+                findReplaceStatus.textContent = 'No matches found';
+            }
+        }
+
+        function highlightFoundCell(isHeader, rowIndex, colIndex) {
+            const cellSelector = `[data-is-header="${isHeader}"][data-row="${rowIndex}"][data-col="${colIndex}"]`;
+            const cell = tableContainer.querySelector(cellSelector);
+            if (cell) {
+                selectCell(cell, isHeader, rowIndex, colIndex);
+                cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        }
+
+        function replaceOne() {
+            if (!findReplaceLastMatch) {
+                findReplaceStatus.textContent = 'Please find a match first';
+                return;
+            }
+
+            const replaceValue = replaceInputElem.value;
+            const { isHeader, rowIndex, colIndex } = findReplaceLastMatch;
+
+            // Push to undo stack
+            const oldValue = isHeader ? filteredData.headers[rowIndex][colIndex] : filteredData.data[rowIndex][colIndex];
+            pushToUndoStack({
+                isHeader,
+                rowIndex,
+                colIndex,
+                oldValue: oldValue,
+                newValue: replaceValue
+            });
+
+            // Replace
+            if (isHeader) {
+                parsedData.headers[rowIndex][colIndex] = replaceValue;
+                filteredData.headers[rowIndex][colIndex] = replaceValue;
+            } else {
+                parsedData.data[rowIndex][colIndex] = replaceValue;
+                filteredData.data[rowIndex][colIndex] = replaceValue;
+            }
+
+            // Track modification
+            const cellId = getCellId(isHeader, rowIndex, colIndex);
+            const originalCellValue = isHeader ?
+                (originalData.headers[rowIndex]?.[colIndex] || '') :
+                (originalData.data[rowIndex]?.[colIndex] || '');
+
+            if (replaceValue !== originalCellValue) {
+                modifiedCells.add(cellId);
+            } else {
+                modifiedCells.delete(cellId);
+            }
+
+            renderTable();
+            findReplaceStatus.textContent = 'Replaced 1 occurrence';
+
+            // Find next
+            findNext();
+        }
+
+        function replaceAll() {
+            const query = findInputElem.value;
+            const replaceValue = replaceInputElem.value;
+
+            if (!query) {
+                findReplaceStatus.textContent = 'Please enter text to find';
+                return;
+            }
+
+            const caseSensitive = caseSensitiveCheckbox.checked;
+            const searchQuery = caseSensitive ? query : query.toLowerCase();
+            let replaceCount = 0;
+
+            // Replace in headers
+            for (let r = 0; r < filteredData.headers.length; r++) {
+                const row = filteredData.headers[r];
+                for (let c = 0; c < row.length; c++) {
+                    const cellValue = String(row[c]);
+                    const compareValue = caseSensitive ? cellValue : cellValue.toLowerCase();
+
+                    if (compareValue.includes(searchQuery)) {
+                        const oldValue = cellValue;
+                        const newValue = caseSensitive ?
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replaceValue) :
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), replaceValue);
+
+                        pushToUndoStack({
+                            isHeader: true,
+                            rowIndex: r,
+                            colIndex: c,
+                            oldValue: oldValue,
+                            newValue: newValue
+                        });
+
+                        parsedData.headers[r][c] = newValue;
+                        filteredData.headers[r][c] = newValue;
+
+                        const cellId = getCellId(true, r, c);
+                        const originalCellValue = originalData.headers[r]?.[c] || '';
+                        if (newValue !== originalCellValue) {
+                            modifiedCells.add(cellId);
+                        } else {
+                            modifiedCells.delete(cellId);
+                        }
+
+                        replaceCount++;
+                    }
+                }
+            }
+
+            // Replace in data
+            for (let r = 0; r < filteredData.data.length; r++) {
+                const row = filteredData.data[r];
+                for (let c = 0; c < row.length; c++) {
+                    const cellValue = String(row[c]);
+                    const compareValue = caseSensitive ? cellValue : cellValue.toLowerCase();
+
+                    if (compareValue.includes(searchQuery)) {
+                        const oldValue = cellValue;
+                        const newValue = caseSensitive ?
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replaceValue) :
+                            cellValue.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), replaceValue);
+
+                        pushToUndoStack({
+                            isHeader: false,
+                            rowIndex: r,
+                            colIndex: c,
+                            oldValue: oldValue,
+                            newValue: newValue
+                        });
+
+                        parsedData.data[r][c] = newValue;
+                        filteredData.data[r][c] = newValue;
+
+                        const cellId = getCellId(false, r, c);
+                        const originalCellValue = originalData.data[r]?.[c] || '';
+                        if (newValue !== originalCellValue) {
+                            modifiedCells.add(cellId);
+                        } else {
+                            modifiedCells.delete(cellId);
+                        }
+
+                        replaceCount++;
+                    }
+                }
+            }
+
+            renderTable();
+            findReplaceStatus.textContent = `Replaced ${replaceCount} occurrence(s)`;
+            findReplaceLastMatch = null;
+        }
+
+        // Column sorting function
+        function sortByColumn(columnIndex) {
+            if (currentEditor) saveCurrentEdit();
+
+            // Toggle sort direction
+            if (sortColumn === columnIndex) {
+                if (sortDirection === 'asc') {
+                    sortDirection = 'desc';
+                } else if (sortDirection === 'desc') {
+                    // Third click: remove sort
+                    sortColumn = null;
+                    sortDirection = null;
+                    filteredData.data = [...filteredData.data]; // Trigger re-render
+                    currentPage = 1;
+                    renderTable();
+                    return;
+                } else {
+                    sortDirection = 'asc';
+                }
+            } else {
+                sortColumn = columnIndex;
+                sortDirection = 'asc';
+            }
+
+            // Sort the data
+            filteredData.data.sort((a, b) => {
+                const aVal = a[columnIndex] || '';
+                const bVal = b[columnIndex] || '';
+
+                // Try to parse as numbers
+                const aNum = parseFloat(aVal);
+                const bNum = parseFloat(bVal);
+
+                let comparison = 0;
+
+                // If both are valid numbers, compare numerically
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    comparison = aNum - bNum;
+                } else {
+                    // Otherwise compare as strings
+                    comparison = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+                }
+
+                return sortDirection === 'asc' ? comparison : -comparison;
+            });
+
+            currentPage = 1;
+            renderTable();
+        }
+
         // Render table
         function renderTable() {
             if (filteredData.data.length === 0) {
@@ -825,9 +2087,18 @@
                 ...filteredData.data.map(row => row.length)
             );
             
-            // Add column letters
+            // Add column letters with sort indicators and filter icons
             for (let i = 0; i < maxColumns; i++) {
-                tableHTML += `<th class="letter-header">${getColumnLetter(i)}</th>`;
+                const sortClass = sortColumn === i
+                    ? (sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc')
+                    : 'sortable';
+                const width = columnWidths[i] ? `style="width: ${columnWidths[i]}px; min-width: ${columnWidths[i]}px;"` : '';
+                const filterActive = columnFilters[i] ? 'active' : '';
+                tableHTML += `<th class="letter-header ${sortClass}" data-col-index="${i}" ${width}>
+                    <span class="filter-icon ${filterActive}" data-col-index="${i}" title="Filter column">⚑</span>
+                    ${getColumnLetter(i)}
+                    <div class="resize-handle" data-col-index="${i}"></div>
+                </th>`;
             }
             tableHTML += '</tr>';
             
@@ -874,7 +2145,8 @@
                     const cellId = getCellId(false, i, colIndex);
                     const isModified = modifiedCells.has(cellId);
                     const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
-                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${colIndex}">${cell}</td>`;
+                    const width = columnWidths[colIndex] ? `style="width: ${columnWidths[colIndex]}px; min-width: ${columnWidths[colIndex]}px;"` : '';
+                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${colIndex}" ${width}>${cell}</td>`;
                 });
                 
                 // Add empty editable cells if needed
@@ -882,7 +2154,8 @@
                     const cellId = getCellId(false, i, j);
                     const isModified = modifiedCells.has(cellId);
                     const cellClass = `editable-cell${isModified ? ' modified' : ''}`;
-                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${j}"></td>`;
+                    const width = columnWidths[j] ? `style="width: ${columnWidths[j]}px; min-width: ${columnWidths[j]}px;"` : '';
+                    tableHTML += `<td class="${cellClass}" data-is-header="false" data-row="${i}" data-col="${j}" ${width}></td>`;
                 }
                 
                 tableHTML += '</tr>';
@@ -895,31 +2168,164 @@
             // Add click event listeners to editable cells
             const editableCells = tableContainer.querySelectorAll('.editable-cell');
             editableCells.forEach(cell => {
-                cell.addEventListener('click', function() {
+                cell.addEventListener('click', function(event) {
                     const isHeader = this.dataset.isHeader === 'true';
                     const rowIndex = parseInt(this.dataset.row);
                     const colIndex = parseInt(this.dataset.col);
-                    
+
+                    // Select cell
+                    selectCell(this, isHeader, rowIndex, colIndex);
+                });
+
+                // Double-click to enter edit mode
+                cell.addEventListener('dblclick', function() {
+                    const isHeader = this.dataset.isHeader === 'true';
+                    const rowIndex = parseInt(this.dataset.row);
+                    const colIndex = parseInt(this.dataset.col);
+
                     enterEditMode(this, isHeader, rowIndex, colIndex);
+                });
+            });
+
+            // Add click event listeners to column headers for sorting
+            const columnHeaders = tableContainer.querySelectorAll('.letter-header');
+            columnHeaders.forEach(header => {
+                header.addEventListener('click', function(e) {
+                    // Don't sort if clicking on resize handle or filter icon
+                    if (e.target.classList.contains('resize-handle') || e.target.classList.contains('filter-icon')) return;
+
+                    const colIndex = parseInt(this.dataset.colIndex);
+                    sortByColumn(colIndex);
+                });
+            });
+
+            // Add click event listeners to filter icons
+            const filterIcons = tableContainer.querySelectorAll('.filter-icon');
+            filterIcons.forEach(icon => {
+                icon.addEventListener('click', function(e) {
+                    e.stopPropagation();
+
+                    const colIndex = parseInt(this.dataset.colIndex);
+
+                    // Remove any existing filter dropdowns
+                    document.querySelectorAll('.filter-dropdown').forEach(d => d.remove());
+
+                    // Create filter dropdown
+                    const dropdown = document.createElement('div');
+                    dropdown.className = 'filter-dropdown show';
+                    dropdown.innerHTML = `
+                        <input type="text" placeholder="Filter..." value="${columnFilters[colIndex] || ''}" id="filter-input-${colIndex}">
+                        <div>
+                            <button onclick="setColumnFilter(${colIndex}, document.getElementById('filter-input-${colIndex}').value); this.parentElement.parentElement.remove();">Apply</button>
+                            <button onclick="clearColumnFilter(${colIndex}); this.parentElement.parentElement.remove();">Clear</button>
+                            <button onclick="this.parentElement.parentElement.remove();">Cancel</button>
+                        </div>
+                    `;
+
+                    // Position dropdown
+                    const th = this.closest('th');
+                    th.style.position = 'relative';
+                    th.appendChild(dropdown);
+
+                    // Focus input
+                    const input = dropdown.querySelector('input');
+                    input.focus();
+                    input.select();
+
+                    // Apply filter on Enter key
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            setColumnFilter(colIndex, input.value);
+                            dropdown.remove();
+                        } else if (e.key === 'Escape') {
+                            dropdown.remove();
+                        }
+                    });
+
+                    // Close dropdown when clicking outside
+                    setTimeout(() => {
+                        function closeDropdown(e) {
+                            if (!dropdown.contains(e.target)) {
+                                dropdown.remove();
+                                document.removeEventListener('click', closeDropdown);
+                            }
+                        }
+                        document.addEventListener('click', closeDropdown);
+                    }, 0);
+                });
+            });
+
+            // Add resize functionality to column headers
+            const resizeHandles = tableContainer.querySelectorAll('.resize-handle');
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const colIndex = parseInt(this.dataset.colIndex);
+                    const th = this.parentElement;
+                    const startX = e.pageX;
+                    const startWidth = th.offsetWidth;
+
+                    th.classList.add('resizing');
+
+                    function onMouseMove(e) {
+                        const diff = e.pageX - startX;
+                        const newWidth = Math.max(60, startWidth + diff);
+                        columnWidths[colIndex] = newWidth;
+
+                        // Update this column's width
+                        th.style.width = newWidth + 'px';
+                        th.style.minWidth = newWidth + 'px';
+
+                        // Update all cells in this column
+                        const allCellsInColumn = tableContainer.querySelectorAll(`td[data-col="${colIndex}"]`);
+                        allCellsInColumn.forEach(cell => {
+                            cell.style.width = newWidth + 'px';
+                            cell.style.minWidth = newWidth + 'px';
+                        });
+                    }
+
+                    function onMouseUp() {
+                        th.classList.remove('resizing');
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+
+                        // Update horizontal scroll width
+                        const table = tableContainer.querySelector('table');
+                        const horizontalScroll = tableContainer.querySelector('.horizontal-scroll');
+                        if (table && horizontalScroll) {
+                            requestAnimationFrame(() => {
+                                const tableWidth = table.offsetWidth;
+                                horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
+                            });
+                        }
+                    }
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
                 });
             });
             
             // Set up horizontal scroll synchronization
             const tableScroll = tableContainer.querySelector('.table-scroll');
             const horizontalScroll = tableContainer.querySelector('.horizontal-scroll');
-            
+
             if (tableScroll && horizontalScroll) {
                 // Get the maximum width of the table
                 const table = tableScroll.querySelector('table');
                 if (table) {
-                    const tableWidth = table.offsetWidth;
-                    horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
-                    
+                    // Use requestAnimationFrame to ensure layout is complete
+                    requestAnimationFrame(() => {
+                        const tableWidth = table.offsetWidth;
+                        horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
+                    });
+
                     // Synchronize scrolling
                     horizontalScroll.addEventListener('scroll', function() {
                         tableScroll.scrollLeft = horizontalScroll.scrollLeft;
                     });
-                    
+
                     tableScroll.addEventListener('scroll', function() {
                         horizontalScroll.scrollLeft = tableScroll.scrollLeft;
                     });
@@ -937,6 +2343,9 @@
                 prevPage.disabled = currentPage === 1;
                 nextPage.disabled = currentPage === totalPages;
             }
+
+            // Update undo/redo status display
+            updateUndoRedoStatus();
         }
         
         // Navigation functions
@@ -975,38 +2384,9 @@
             }
         }
         
-        // Search function
+        // Search function (now uses applyFilters)
         function search() {
-            if (currentEditor) saveCurrentEdit();
-            if (!parsedData.data.length) return;
-            
-            const query = searchInput.value.toLowerCase();
-            
-            if (!query.trim()) {
-                filteredData = { ...parsedData };
-            } else {
-                const filteredRows = parsedData.data.filter(row => 
-                    row.some(cell => String(cell).toLowerCase().includes(query))
-                );
-                
-                filteredData = {
-                    headers: parsedData.headers,
-                    data: filteredRows
-                };
-            }
-            
-            currentPage = 1;
-            renderTable();
-            
-            // Show result count in status
-            if (query.trim()) {
-                status.textContent = `Found ${filteredData.data.length} matching rows`;
-                setTimeout(() => {
-                    if (status.textContent.startsWith('Found ')) {
-                        status.textContent = '';
-                    }
-                }, 3000);
-            }
+            applyFilters();
         }
         
         // Save changes permanently
@@ -1047,7 +2427,7 @@
             
             if (confirm('Are you sure you want to reset all changes? This cannot be undone.')) {
                 parsedData = JSON.parse(JSON.stringify(originalData));
-                filteredData = { ...parsedData };
+                filteredData = JSON.parse(JSON.stringify(parsedData)); // Deep copy
                 modifiedCells.clear();
                 renderTable();
                 status.textContent = 'All changes have been reset';
@@ -1059,37 +2439,98 @@
             }
         }
         
+        // Helper function to escape CSV values according to RFC 4180
+        function escapeCSVValue(value, delimiter) {
+            // Convert to string
+            const strValue = String(value);
+
+            // Check if escaping is needed (contains delimiter, quote, or newline)
+            const needsEscaping = strValue.includes(delimiter) ||
+                                  strValue.includes('"') ||
+                                  strValue.includes('\n') ||
+                                  strValue.includes('\r');
+
+            if (needsEscaping) {
+                // Escape quotes by doubling them and wrap in quotes
+                return '"' + strValue.replace(/"/g, '""') + '"';
+            }
+
+            return strValue;
+        }
+
         // Export function
         function exportData() {
             if (currentEditor) saveCurrentEdit();
             if (!filteredData.data.length) return;
-            
+
             const csvDelimiter = delimiter.value === 'auto' ? ',' : delimiter.value;
             let csv = '';
-            
+
             // Add headers
             if (filteredData.headers.length > 0) {
                 filteredData.headers.forEach(row => {
-                    csv += row.join(csvDelimiter) + '\n';
+                    const escapedRow = row.map(cell => escapeCSVValue(cell, csvDelimiter));
+                    csv += escapedRow.join(csvDelimiter) + '\n';
                 });
             }
-            
+
             // Add data
             filteredData.data.forEach(row => {
-                csv += row.join(csvDelimiter) + '\n';
+                const escapedRow = row.map(cell => escapeCSVValue(cell, csvDelimiter));
+                csv += escapedRow.join(csvDelimiter) + '\n';
             });
-            
-            // Create download
+
+            // Create download with original filename or 'export.csv'
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'export.csv';
+            a.download = originalFileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
         }
-        
+
+        // Export JSON
+        function exportJSON() {
+            if (currentEditor) saveCurrentEdit();
+            if (!filteredData.data.length) return;
+
+            // Build JSON array
+            const jsonData = [];
+
+            // If headers exist, use them as keys
+            if (filteredData.headers.length > 0) {
+                // Use first header row as keys
+                const keys = filteredData.headers[0];
+
+                filteredData.data.forEach(row => {
+                    const obj = {};
+                    keys.forEach((key, index) => {
+                        obj[key || `Column_${index + 1}`] = row[index] || '';
+                    });
+                    jsonData.push(obj);
+                });
+            } else {
+                // No headers, just export as arrays
+                filteredData.data.forEach(row => {
+                    jsonData.push(row);
+                });
+            }
+
+            const json = JSON.stringify(jsonData, null, 2);
+
+            // Create download
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = originalFileName.replace(/\.(csv|tsv|txt)$/i, '.json') || 'export.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
         // Copy to clipboard
         function copyToClipboard() {
             if (currentEditor) saveCurrentEdit();
@@ -1127,9 +2568,21 @@
                 });
         }
         
+        // Help Modal functions
+        function openHelp() {
+            helpModal.classList.add('show');
+            helpOverlay.classList.add('show');
+        }
+
+        function closeHelp() {
+            helpModal.classList.remove('show');
+            helpOverlay.classList.remove('show');
+        }
+
         // Toggle dark mode
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode', this.checked);
+            savePreferences();
         }
     </script>
 </body>
