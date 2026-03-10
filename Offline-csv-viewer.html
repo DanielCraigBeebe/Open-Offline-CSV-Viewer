@@ -61,6 +61,9 @@
             position: sticky;
             top: 15px;
         }
+        .no-h-scroll th {
+            top: 0;
+        }
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
@@ -773,7 +776,6 @@
 
         /* Ensure container scales with browser window */
         html, body {
-            width: 100%;
             overflow-x: hidden;
         }
 
@@ -2290,13 +2292,17 @@
                         document.removeEventListener('mousemove', onMouseMove);
                         document.removeEventListener('mouseup', onMouseUp);
 
-                        // Update horizontal scroll width
+                        // Update horizontal scroll width and visibility
                         const table = tableContainer.querySelector('table');
                         const horizontalScroll = tableContainer.querySelector('.horizontal-scroll');
-                        if (table && horizontalScroll) {
+                        const tableScrollEl = tableContainer.querySelector('.table-scroll');
+                        if (table && horizontalScroll && tableScrollEl) {
                             requestAnimationFrame(() => {
                                 const tableWidth = table.offsetWidth;
+                                const needsScroll = tableWidth > tableScrollEl.offsetWidth;
                                 horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
+                                horizontalScroll.style.display = needsScroll ? '' : 'none';
+                                tableContainer.classList.toggle('no-h-scroll', !needsScroll);
                             });
                         }
                     }
@@ -2317,7 +2323,10 @@
                     // Use requestAnimationFrame to ensure layout is complete
                     requestAnimationFrame(() => {
                         const tableWidth = table.offsetWidth;
+                        const needsScroll = tableWidth > tableScroll.offsetWidth;
                         horizontalScroll.querySelector('.horizontal-scroll-inner').style.width = tableWidth + 'px';
+                        horizontalScroll.style.display = needsScroll ? '' : 'none';
+                        tableContainer.classList.toggle('no-h-scroll', !needsScroll);
                     });
 
                     // Synchronize scrolling
